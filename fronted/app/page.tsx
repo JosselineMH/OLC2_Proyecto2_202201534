@@ -215,7 +215,7 @@ export default function Home() {
             className='bg-green-500 hover:bg-green-600 text-gray-900 font-bold py-2 px-4 rounded transition duration-300 ease-in-out transform hover:scale-105'
             onClick={handleExecute}
           >
-            EJECUTAR
+            COMPILAR
           </button>
         </div>
         <h2 className='text-xl font-bold mb-2 text-white'>Editor:</h2>

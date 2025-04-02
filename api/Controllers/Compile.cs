@@ -60,10 +60,13 @@ namespace api.Controllers
             {
                 var tree = parser.program();
 
-                var visitor = new CompilerVisitor();
-                visitor.Visit(tree);
+                var interpreter = new InterpreterVisitor();
+                interpreter.Visit(tree);
 
-                return Ok(new { result = visitor.output });
+                var compiler = new CompilerVisitor();
+                compiler.Visit(tree);
+
+                return Ok(new { result = compiler.c.ToString() });
 
             }
             catch (ParseCanceledException ex)
@@ -167,7 +170,7 @@ namespace api.Controllers
             try
             {
                 var tree = parser.program();
-                var visitor = new CompilerVisitor();
+                var visitor = new InterpreterVisitor();
                 visitor.Visit(tree);
 
                 string htmlTable = visitor.entornoActual.GenerateSymbolTableHtml();

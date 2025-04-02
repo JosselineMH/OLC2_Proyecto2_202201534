@@ -1,4 +1,4 @@
-// Generated from /home/josseline/Escritorio/GoLight/api/grammars/Language.g4 by ANTLR 4.13.1
+// Generated from /home/josseline/Escritorio/OLC2_PROYECTO2/api/grammars/Language.g4 by ANTLR 4.13.1
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ErrorNode;
@@ -35,6 +35,18 @@ public class LanguageBaseListener implements LanguageListener {
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitDcl(LanguageParser.DclContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterDclFuera(LanguageParser.DclFueraContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitDclFuera(LanguageParser.DclFueraContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -424,6 +436,18 @@ public class LanguageBaseListener implements LanguageListener {
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterSliceLiteral(LanguageParser.SliceLiteralContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitSliceLiteral(LanguageParser.SliceLiteralContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterParens(LanguageParser.ParensContext ctx) { }
 	/**
 	 * {@inheritDoc}
@@ -472,6 +496,18 @@ public class LanguageBaseListener implements LanguageListener {
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterStructAccess(LanguageParser.StructAccessContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitStructAccess(LanguageParser.StructAccessContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterMulDivMod(LanguageParser.MulDivModContext ctx) { }
 	/**
 	 * {@inheritDoc}
@@ -515,6 +551,18 @@ public class LanguageBaseListener implements LanguageListener {
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitNumber(LanguageParser.NumberContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterStructAssign(LanguageParser.StructAssignContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitStructAssign(LanguageParser.StructAssignContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -659,6 +707,18 @@ public class LanguageBaseListener implements LanguageListener {
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitSliceFuncIndex(LanguageParser.SliceFuncIndexContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterNil(LanguageParser.NilContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitNil(LanguageParser.NilContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *

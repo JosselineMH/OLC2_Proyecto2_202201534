@@ -1,4 +1,4 @@
-// Generated from /home/josseline/Escritorio/GoLight/api/grammars/Language.g4 by ANTLR 4.13.1
+// Generated from /home/josseline/Escritorio/OLC2_PROYECTO2/api/grammars/Language.g4 by ANTLR 4.13.1
 import org.antlr.v4.runtime.tree.ParseTreeListener;
 
 /**
@@ -26,6 +26,16 @@ public interface LanguageListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitDcl(LanguageParser.DclContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link LanguageParser#dclFuera}.
+	 * @param ctx the parse tree
+	 */
+	void enterDclFuera(LanguageParser.DclFueraContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link LanguageParser#dclFuera}.
+	 * @param ctx the parse tree
+	 */
+	void exitDclFuera(LanguageParser.DclFueraContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code DeclaracionExplicita}
 	 * labeled alternative in {@link LanguageParser#declaracionVariable}.
@@ -391,6 +401,18 @@ public interface LanguageListener extends ParseTreeListener {
 	 */
 	void exitSliceLenFunc(LanguageParser.SliceLenFuncContext ctx);
 	/**
+	 * Enter a parse tree produced by the {@code SliceLiteral}
+	 * labeled alternative in {@link LanguageParser#expresion}.
+	 * @param ctx the parse tree
+	 */
+	void enterSliceLiteral(LanguageParser.SliceLiteralContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code SliceLiteral}
+	 * labeled alternative in {@link LanguageParser#expresion}.
+	 * @param ctx the parse tree
+	 */
+	void exitSliceLiteral(LanguageParser.SliceLiteralContext ctx);
+	/**
 	 * Enter a parse tree produced by the {@code Parens}
 	 * labeled alternative in {@link LanguageParser#expresion}.
 	 * @param ctx the parse tree
@@ -439,6 +461,18 @@ public interface LanguageListener extends ParseTreeListener {
 	 */
 	void exitLogicalNot(LanguageParser.LogicalNotContext ctx);
 	/**
+	 * Enter a parse tree produced by the {@code StructAccess}
+	 * labeled alternative in {@link LanguageParser#expresion}.
+	 * @param ctx the parse tree
+	 */
+	void enterStructAccess(LanguageParser.StructAccessContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code StructAccess}
+	 * labeled alternative in {@link LanguageParser#expresion}.
+	 * @param ctx the parse tree
+	 */
+	void exitStructAccess(LanguageParser.StructAccessContext ctx);
+	/**
 	 * Enter a parse tree produced by the {@code MulDivMod}
 	 * labeled alternative in {@link LanguageParser#expresion}.
 	 * @param ctx the parse tree
@@ -486,6 +520,18 @@ public interface LanguageListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitNumber(LanguageParser.NumberContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code StructAssign}
+	 * labeled alternative in {@link LanguageParser#expresion}.
+	 * @param ctx the parse tree
+	 */
+	void enterStructAssign(LanguageParser.StructAssignContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code StructAssign}
+	 * labeled alternative in {@link LanguageParser#expresion}.
+	 * @param ctx the parse tree
+	 */
+	void exitStructAssign(LanguageParser.StructAssignContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code LogicalAnd}
 	 * labeled alternative in {@link LanguageParser#expresion}.
@@ -630,6 +676,18 @@ public interface LanguageListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitSliceFuncIndex(LanguageParser.SliceFuncIndexContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code Nil}
+	 * labeled alternative in {@link LanguageParser#expresion}.
+	 * @param ctx the parse tree
+	 */
+	void enterNil(LanguageParser.NilContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code Nil}
+	 * labeled alternative in {@link LanguageParser#expresion}.
+	 * @param ctx the parse tree
+	 */
+	void exitNil(LanguageParser.NilContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code Float}
 	 * labeled alternative in {@link LanguageParser#expresion}.

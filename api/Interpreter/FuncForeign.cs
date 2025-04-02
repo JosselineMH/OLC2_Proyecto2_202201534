@@ -28,7 +28,7 @@ public class FuncForeign : Invocable
         return 0;
    }
 
-    public ValueWrapper Invoke(List<ValueWrapper> args, CompilerVisitor visitor)
+    public ValueWrapper Invoke(List<ValueWrapper> args, InterpreterVisitor visitor)
     {
         var nuevoEntorno = new Environment(clousure);
         var EntornoAntesLlamada = visitor.entornoActual;

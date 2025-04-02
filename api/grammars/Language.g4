@@ -1,16 +1,14 @@
 	grammar Language;
 
 
-	program: (dclFuera*)? 'func main()' '{' dcl* '}';
+	program: dclFuera* 'func main()' '{' dcl* '}';
 
 	dcl: declaracionVariable  (';')? 
 		| declaracionFuncForanea 
-		| structDecl
 		| sentencia (';')? ;
 
 	dclFuera: declaracionVariable  (';')? 
-		| declaracionFuncForanea 
-		| structDecl;
+		| declaracionFuncForanea;
 
 	declaracionVariable: 'var' ID tipoDeclaracion '=' expresion  	# DeclaracionExplicita
 						| 'var' ID tipoDeclaracion 	 				# DeclaracionPorDefecto
@@ -26,18 +24,13 @@
 
 	slice: ID ':=' expresion	# DeclaracionSliceValores
 		| 'var' ID '[' ']' tipoDeclaracion     								# DeclaracionSliceVacio
-		| ID '=' ID                                							# DeclaracionSliceCopia
-		| ID ':=' '[' ']' ('[' ']')+ tipoDeclaracion '{' elementosSlice? '}' # DeclaracionSliceMultidimensional;
+		| ID '=' ID                                							# DeclaracionSliceCopia;
 
 	elementosSlice: elementoSlice (',' elementoSlice)* ','?;
 
 	elementoSlice: '{' elementosSlice? '}'  
 				| '{' (expresion (',' expresion)*)? '}';
 
-
-	structDecl: 'type' ID 'struct' '{' atributoStruct* '}' ;          
-
-	atributoStruct: ID tipoFunc (ID tipoFunc)*;
 
 	sentencia: expresion  													# ExprStmt 
 			| 'fmt.Println(' (expresion (',' expresion)*)? ')'				# PrintStmt
@@ -66,7 +59,6 @@
 			| 'len(' expresion ')'							# SliceLenFunc
 			| 'append(' ID ',' expresion ')'				# SliceAppendFunc
 			| ID '[' expresion ']'							# SliceAccess
-			| ID ('[' expresion ']')+ 						# SliceMatrixAccess
 			|'-' expresion									# Negate
 			| expresion call+								# Callee
 			| '!' expresion									# LogicalNot
@@ -77,10 +69,8 @@
 			| expresion op = '&&' expresion					# LogicalAnd
 			| expresion op = '||' expresion					# LogicalOr
 			| ID op = ('++' | '--')							# IncrementDecrement
-			| ID ('.' ID)+ '=' expresion  						# StructAssign
 			| ID op = ( '=' | '+=' | '-=' ) expresion		# AssignVar
 			| ID '[' indice = expresion ']' '=' valor = expresion		# AssignSlice
-			| ID ('[' expresion ']')+ '=' expresion						# AssignSliceMultidimensional
 			| '[' ']' tipoDeclaracion '{' expresion (',' expresion)* '}' # SliceLiteral
 			| BOOL														# Boolean
 			| FLOAT														# Float
@@ -89,9 +79,7 @@
 			| INT												# Number
 			| 'nil'												# Nil
 			| ID												# Identifier
-			| ID ('.' ID)+                                      # StructAccess
-			| '(' expresion ')'									# Parens
-			| ID '{' atributoInstancia '}'						# StructInstancia;
+			| '(' expresion ')'									# Parens;
 
 	atributoInstancia: ID ':' expresion (',' ID ':' expresion)*;
 
