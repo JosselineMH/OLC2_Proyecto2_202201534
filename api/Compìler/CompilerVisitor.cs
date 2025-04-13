@@ -37,31 +37,85 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
     public override Object? VisitDeclaracionExplicita(LanguageParser.DeclaracionExplicitaContext context)
     { 
+        var varName = context.ID().GetText();
+        c.Comment("Variable: " + varName);
+
+        Visit(context.expresion());
+        c.TagObject(varName);
+
         return null;
-       
     }
 
     // VisitDeclaracionPorDefecto
 
 
-    public override Object? VisitDeclaracionPorDefecto(LanguageParser.DeclaracionPorDefectoContext context)
+    public override object? VisitDeclaracionPorDefecto(LanguageParser.DeclaracionPorDefectoContext context)
     {
+        var varName = context.ID().GetText();
+        var tipo = context.tipoDeclaracion().GetText();
+
+        c.Comment($"Declaración por defecto: {varName} ({tipo})");
+
+        StackObject obj;
+
+        switch (tipo)
+        {
+            case "int":
+                obj = c.IntObject();
+                c.Mov(Register.X0, 0); 
+                break;
+            case "float64":
+                obj = c.FloatObject();
+             
+                c.Mov(Register.X0, 0); // por ahora
+                break;
+            case "string":
+                obj = c.StringObject();
+                c.Mov(Register.X0, 0); //puntero vacío
+                break;
+            case "rune":
+                obj = new StackObject { Type = StackObject.StackObjectType.Rune, Lenght = 8, Depth = 0, Id = null };
+                c.Mov(Register.X0, 0);
+                break;
+            default:
+                throw new Exception("Tipo no soportado: " + tipo);
+        }
+
+        c.Push(Register.X0);
+        c.PushObject(obj);
+        c.TagObject(varName);
+
         return null;
     }
-    
+
 
 
     // VisitDeclaracionImplicita
 
-    public override Object? VisitDeclaracionImplicita(LanguageParser.DeclaracionImplicitaContext context)
+    public override object? VisitDeclaracionImplicita(LanguageParser.DeclaracionImplicitaContext context)
     {
+        var varName = context.ID().GetText();
+        c.Comment($"Declaración implícita: {varName}");
+
+        Visit(context.expresion());
+
+        var obj = c.PopObject(Register.X0);
+        c.Push(Register.X0);
+        c.PushObject(c.CloneObject(obj));
+        c.TagObject(varName);
+
         return null;
     }
+
 
 
     // VisitExprStmt
     public override Object? VisitExprStmt(LanguageParser.ExprStmtContext context)
     {
+        c.Comment("Expression statement");
+        Visit(context.expresion());
+        c.Comment("Popping value to discard ");
+        c.PopObject(Register.X0);
         return null;
     }
 
@@ -73,8 +127,23 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
         foreach (var expr in context.expresion())
         {
             Visit(expr);               
-            c.Pop(Register.X0);        
-            c.PrintInt(Register.X0);   
+            var value = c.PopObject(Register.X0);   
+            if (value.Type == StackObject.StackObjectType.Int)
+            {
+                c.PrintInt(Register.X0);
+            }
+            else if (value.Type == StackObject.StackObjectType.String)
+            {
+                c.PrintString(Register.X0);
+            }
+            else if (value.Type== StackObject.StackObjectType.Float)
+            {
+                //c.PrintFloat(Register.X0);
+            }
+            else if (value.Type == StackObject.StackObjectType.Rune)
+            {
+               // c.PrintRune(Register.X0);
+            }   
         }
 
         return null;
@@ -85,8 +154,23 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
     // VisitIdentifier
     public override Object? VisitIdentifier(LanguageParser.IdentifierContext context)
-    {
-       return null;
+    {   
+        var id = context.ID().GetText();
+        c.Comment("Identifier: " + id);
+
+        var (offset, obj) = c.GetObject(id);
+        c.Mov(Register.X0, offset);
+        c.Add(Register.X0, Register.SP, Register.X0);
+        c.Ldr(Register.X0, Register.X0);
+
+        c.Push(Register.X0);
+
+        var newObject = c.CloneObject(obj);
+        newObject.Id = null;
+        c.PushObject(newObject);
+
+
+        return null;
     }
 
     // VisitParens
@@ -99,6 +183,24 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
     public override Object? VisitBlockStmt(LanguageParser.BlockStmtContext context)
     {
+        c.Comment("Block statement");
+        c.NewScope();
+
+        foreach (var dcl in context.dcl())
+        {
+            Visit(dcl);
+        }
+
+        int bytesRemove = c.endScope();
+
+        if (bytesRemove  > 0)
+        {
+            c.Comment("Removing " + bytesRemove + " bytes from stack");
+            c.Mov(Register.X0, bytesRemove);
+            c.Add(Register.SP, Register.SP, Register.X0);
+            c.Comment("Stack pointer adjusted");
+        }
+
         return null;
     }
 
@@ -113,8 +215,8 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     {
         var value = context.INT().GetText();
         c.Comment("Constant: " + value);
-        c.Mov(Register.X0, int.Parse(value));
-        c.Push(Register.X0);
+        var intObject = c.IntObject();
+        c.PushConstant(intObject, int.Parse(value));
         return null;
     }
 
@@ -135,6 +237,10 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
    public override Object? VisitString(LanguageParser.StringContext context)
     {
+        var value = context.STRING().GetText().Trim('"');
+        c.Comment("String constant: " + value);
+        var stringObject = c.StringObject();
+        c.PushConstant(stringObject, value);
         return null;
     }
 
@@ -183,13 +289,15 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     // VisitAddSub
     public override Object? VisitAddSub(LanguageParser.AddSubContext context)
     {
-
+        c.Comment("Add/Sub operation");
         var operation = context.op.Text;
+
         Visit(context.expresion(0));
         Visit(context.expresion(1));
 
-        c.Pop(Register.X1);
-        c.Pop(Register.X0);
+       
+        var right = c.PopObject(Register.X1);
+        var left = c.PopObject(Register.X0);
         
         if (operation == "+")
         {
@@ -201,6 +309,7 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
         }
 
         c.Push(Register.X0);
+        c.PushObject(c.CloneObject(left));
 
         return null;
     }
@@ -209,8 +318,50 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     
     public override Object? VisitAssignVar(LanguageParser.AssignVarContext context)
     {
+        string varName = context.ID().GetText();
+        string op = context.op.Text;
+
+        c.Comment("Assigning to variable: " + varName + " with operator " + op);
+
+        Visit(context.expresion());
+
+        var valueObject = c.PopObject(Register.X0);
+        var (offset, varObject) = c.GetObject(varName);
+
+        // Dirección en memoria de la variable
+        c.Mov(Register.X1, offset);
+        c.Add(Register.X1, Register.SP, Register.X1);
+
+        if (op == "=")
+        {
+            // Asignación directa
+            c.Str(Register.X0, Register.X1);
+        }
+        else
+        {
+            // Obtener el valor actual de la variable
+            c.Ldr(Register.X2, Register.X1);
+
+            if (op == "+=")
+            {
+                c.Add(Register.X0, Register.X2, Register.X0);
+            }
+            else if (op == "-=")
+            {
+                c.Sub(Register.X0, Register.X2, Register.X0);
+            }
+
+            c.Str(Register.X0, Register.X1);
+        }
+
+        varObject.Type = valueObject.Type;
+
+        c.Push(Register.X0);
+        c.PushObject(c.CloneObject(varObject));
+
         return null;
     }
+
     
     
     // VisitRelational

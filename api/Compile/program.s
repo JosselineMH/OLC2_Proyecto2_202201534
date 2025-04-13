@@ -1,16 +1,20 @@
+.data
+heap: .space 4096
 .text
 .global _start
 _start:
-// Print statement
-// Constant: 10
-MOV x0, #10
+    adr x10, heap
+// Declaración implícita: x
+// Constant: 5
+MOV x0, #5
 STR x0, [SP, #-8]!
-// Constant: 2
-MOV x0, #2
-STR x0, [SP, #-8]!
-LDR x1, [SP], #8
 LDR x0, [SP], #8
-SDIV x0, x0, x1
+STR x0, [SP, #-8]!
+// Print statement
+// Identifier: x
+MOV x0, #0
+ADD x0, sp, x0
+LDR x0, [x0, #0]
 STR x0, [SP, #-8]!
 LDR x0, [SP], #8
 MOV X0, x0
@@ -128,3 +132,4 @@ print_result:
 
 minus_sign:
     .ascii "-"               // Minus sign
+
