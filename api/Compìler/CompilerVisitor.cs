@@ -566,7 +566,6 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
         c.Cmp(Register.X0, "#1");
         c.Beq(trueLabel);
 
-        // Ambos son false
         c.Mov(Register.X0, 0);
         c.B(endLabel);
 
@@ -713,11 +712,40 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     }
 
     // VisitIfStmt
-
-    public override Object? VisitIfStmt(LanguageParser.IfStmtContext context)
+    public override object? VisitIfStmt(LanguageParser.IfStmtContext context)
     {
+        string trueLabel = c.NewLabel("if_true");
+        string falseLabel = c.NewLabel("if_false");
+        string endLabel = c.NewLabel("if_end");
+
+        // condición
+        Visit(context.expresion());
+
+
+        // bloque falso si la condición es falsa
+        bool hayElse = context.sentencia().Length == 2;
+
+        c.Cmp(Register.X0, "#0");
+        c.Beq(hayElse ? falseLabel : endLabel);
+
+        // Verdadero
+        c.Label(trueLabel);
+        Visit(context.sentencia(0)); 
+        c.B(endLabel);
+
+        // Si es Falso pero hay else)
+        if (hayElse)
+        {
+            c.Label(falseLabel);
+            Visit(context.sentencia(1)); 
+        }
+
+        c.Label(endLabel);
+
         return null;
     }
+
+
 
     //VisitBreakStmt
 
