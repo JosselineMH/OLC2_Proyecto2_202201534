@@ -38,10 +38,14 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     public override Object? VisitDeclaracionExplicita(LanguageParser.DeclaracionExplicitaContext context)
     { 
         var varName = context.ID().GetText();
-        c.Comment("Variable: " + varName);
+        c.Comment("Variable explícita: " + varName);
 
         Visit(context.expresion());
-        c.TagObject(varName);
+
+        var value = c.PopObject(Register.X0);     
+        c.Push(Register.X0);                       
+        c.PushObject(c.CloneObject(value));        
+        c.TagObject(varName);                      
 
         return null;
     }
@@ -391,39 +395,219 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     
     // VisitRelational
 
-    public override Object? VisitRelational(LanguageParser.RelationalContext context)
+    public override object? VisitRelational(LanguageParser.RelationalContext context)
     {
+        var op = context.op.Text;
+        c.Comment($"Operación relacional: {op}");
+
+        Visit(context.expresion(0));
+        Visit(context.expresion(1));
+
+        var right = c.PopObject(Register.X1);
+        var left = c.PopObject(Register.X0);
+
+
+        bool tiposCompatibles = (left.Type == StackObject.StackObjectType.Int && right.Type == StackObject.StackObjectType.Int)
+                            || (left.Type == StackObject.StackObjectType.Rune && right.Type == StackObject.StackObjectType.Rune);
+
+      
+
+        string trueLabel = c.NewLabel("rel_true");
+        string endLabel = c.NewLabel("rel_end");
+
+        c.Cmp(Register.X0, Register.X1);
+
+        switch (op)
+        {
+            case "<":
+                c.Blt(trueLabel);
+                break;
+            case "<=":
+                c.Ble(trueLabel);
+                break;
+            case ">":
+                c.Bgt(trueLabel);
+                break;
+            case ">=":
+                c.Bge(trueLabel);
+                break;
+        }
+
+        // Falso
+        c.Mov(Register.X0, 0);
+        c.B(endLabel);
+
+        // Verdadero
+        c.Label(trueLabel);
+        c.Mov(Register.X0, 1);
+
+        // Final
+        c.Label(endLabel);
+        c.Push(Register.X0);
+        c.PushObject(c.BoolObject());
+
         return null;
     }
 
-    // VisitLogicalAnd
+    // VisitEquality
 
-    public override Object? VisitLogicalAnd(LanguageParser.LogicalAndContext context)
+    public override object? VisitEquality(LanguageParser.EqualityContext context)
     {
-       return null;
+        var op = context.op.Text;
+        c.Comment($"Operación de igualdad: {op}");
+
+        Visit(context.expresion(0));
+        Visit(context.expresion(1));
+
+        var right = c.PopObject(Register.X1);
+        var left = c.PopObject(Register.X0);
+
+        string trueLabel = c.NewLabel("eq_true");
+        string endLabel = c.NewLabel("eq_end");
+
+        switch (left.Type)
+        {
+            case StackObject.StackObjectType.Int:
+            case StackObject.StackObjectType.Rune:
+            case StackObject.StackObjectType.Bool:
+                c.Cmp(Register.X0, Register.X1);
+                if (op == "==")
+                    c.Beq(trueLabel);
+                else
+                    c.Bne(trueLabel);
+                break;
+
+            case StackObject.StackObjectType.String:
+                c.Comment("Comparar strings con función externa");
+                c.UseStdLib("string_equals");
+
+                c.Mov("x0", Register.X0); 
+                c.Mov("x1", Register.X1); 
+                c.Bl("string_equals");
+
+                if (op == "==")
+                    c.Cmp("x0", "#1");
+                else
+                    c.Cmp("x0", "#0");
+
+                c.Beq(trueLabel);
+                break;
+        }
+
+        // Falso
+        c.Mov(Register.X0, 0);
+        c.B(endLabel);
+
+        // Verdadero
+        c.Label(trueLabel);
+        c.Mov(Register.X0, 1);
+
+        c.Label(endLabel);
+        c.Push(Register.X0);
+        c.PushObject(c.BoolObject());
+
+        return null;
     }
 
-    
+     // VisitLogicalAnd
 
-    public override Object? VisitEquality(LanguageParser.EqualityContext context)
+    public override object? VisitLogicalAnd(LanguageParser.LogicalAndContext context)
     {
-        return null; 
+        string falseLabel = c.NewLabel("and_false");
+        string endLabel = c.NewLabel("and_end");
+
+        c.Comment("Lado izquierdo del AND");
+        Visit(context.expresion(0));
+        c.PopObject(Register.X0);
+
+        // caso falso, salta al falseLabel
+        c.Cmp(Register.X0, "#0");
+        c.Beq(falseLabel);
+
+        c.Comment("Lado derecho del AND");
+        Visit(context.expresion(1));
+        c.PopObject(Register.X0);
+        c.Cmp(Register.X0, "#0");
+        c.Beq(falseLabel);
+
+        // Ambos son true
+        c.Mov(Register.X0, 1);
+        c.B(endLabel);
+
+        c.Label(falseLabel);
+        c.Mov(Register.X0, 0);
+
+        c.Label(endLabel);
+        c.Push(Register.X0);
+        c.PushObject(c.BoolObject());
+
+        return null;
     }
+
 
 
     // VisitLogicalOr
 
-    public override Object? VisitLogicalOr(LanguageParser.LogicalOrContext context)
+    public override object? VisitLogicalOr(LanguageParser.LogicalOrContext context)
     {
-       return null; 
+        string trueLabel = c.NewLabel("or_true");
+        string endLabel = c.NewLabel("or_end");
+
+        c.Comment("Lado izquierdo del OR");
+        Visit(context.expresion(0));
+        c.PopObject(Register.X0);
+
+        c.Cmp(Register.X0, "#1");
+        c.Beq(trueLabel);
+
+        c.Comment("Lado derecho del OR");
+        Visit(context.expresion(1));
+        c.PopObject(Register.X0);
+        c.Cmp(Register.X0, "#1");
+        c.Beq(trueLabel);
+
+        // Ambos son false
+        c.Mov(Register.X0, 0);
+        c.B(endLabel);
+
+        c.Label(trueLabel);
+        c.Mov(Register.X0, 1);
+
+        c.Label(endLabel);
+        c.Push(Register.X0);
+        c.PushObject(c.BoolObject());
+
+        return null;
     }
+
 
     // VisitLogicalNot
 
-    public override Object? VisitLogicalNot(LanguageParser.LogicalNotContext context)
+    public override object? VisitLogicalNot(LanguageParser.LogicalNotContext context)
     {
+        c.Comment("Operador lógico NOT");
+        Visit(context.expresion());
+        c.PopObject(Register.X0);
+
+        c.Cmp(Register.X0, "#0");
+        string trueLabel = c.NewLabel("not_true");
+        string endLabel = c.NewLabel("not_end");
+
+        c.Beq(trueLabel);
+
+        c.Mov(Register.X0, 0); // true a false
+        c.B(endLabel);
+
+        c.Label(trueLabel);
+        c.Mov(Register.X0, 1); // false a true
+
+        c.Label(endLabel);
+        c.Push(Register.X0);
+        c.PushObject(c.BoolObject());
+
         return null;
     }
+
 
     // VisitIncrementeDecrement
 

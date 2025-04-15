@@ -237,7 +237,37 @@ true_str:
     .balign 4
 false_str:
     .ascii  ""false""
-" }
+" },
+{
+    "string_equals", @"
+    // ----------------------------------------------------------
+    // string_equals - Compara dos strings null-terminated
+    // Entrada: x0 y x1 apuntan a los strings
+    // Salida: x0 = 1 si son iguales, x0 = 0 si no
+    // ----------------------------------------------------------
+    .balign 4
+string_equals:
+    mov x2, x0      // x2 = string1
+    mov x3, x1      // x3 = string2
+eq_loop:
+    ldrb w4, [x2]   // w4 = *x2
+    ldrb w5, [x3]   // w5 = *x3
+    cmp w4, w5
+    b.ne eq_false
+    cmp w4, #0      // ¿fin de string?
+    b.eq eq_true
+    add x2, x2, #1
+    add x3, x3, #1
+    b eq_loop
+eq_true:
+    mov x0, #1
+    ret
+eq_false:
+    mov x0, #0
+    ret
+"
+}
+
 
 
     };

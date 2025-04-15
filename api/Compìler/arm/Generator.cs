@@ -250,7 +250,11 @@ public class ArmGenerator
     {
        Instructions.Add($"MOV {rd}, #{imm}");
     }
-
+   
+   public void Mov(string rd, string rs)
+   {
+      Instructions.Add($"MOV {rd}, {rs}");
+   }
 
     public void Push(string rs)
     {
@@ -279,6 +283,66 @@ public class ArmGenerator
    {
       Instructions.Add($"NEG {rd}, {rs}");
    }
+
+   //para las relacionales
+   public void Cmp(string rs1, string rs2)
+   {
+      Instructions.Add($"CMP {rs1}, {rs2}");
+   }
+
+   public void Bgt(string label)
+   {
+      Instructions.Add($"B.GT {label}");
+   }
+
+   public void Bge(string label)
+   {
+      Instructions.Add($"B.GE {label}");
+   }
+
+   public void Blt(string label)
+   {
+      Instructions.Add($"B.LT {label}");
+   }
+
+   public void Ble(string label)
+   {
+      Instructions.Add($"B.LE {label}");
+   }
+   
+
+   public void B(string label)
+   {
+      Instructions.Add($"B {label}");
+   }
+
+   public void Label(string label)
+   {
+      Instructions.Add($"{label}:");
+   }
+
+
+   // Comparación de igualdad
+   public void Beq(string label)
+   {
+      Instructions.Add($"B.EQ {label}");
+   }
+
+   public void Bne(string label)
+   {
+      Instructions.Add($"B.NE {label}");
+   }
+
+   public void UseStdLib(string functionName)
+   {
+      stdLib.Use(functionName);
+   }
+
+   public void Bl(string label)
+   {
+      Instructions.Add($"BL {label}");
+   }
+
 
 
    //-----
@@ -319,7 +383,7 @@ public class ArmGenerator
    }
 
 
-   private string NewLabel(string baseName)
+   public string NewLabel(string baseName)
    {
       return $"{baseName}_{labelCounter++}";
    }
