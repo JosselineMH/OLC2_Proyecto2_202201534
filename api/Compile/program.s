@@ -4,21 +4,24 @@ heap: .space 4096
 .global _start
 _start:
     adr x10, heap
-// Declaración implícita: x
-// Constant: 5
-MOV x0, #5
+// Print statement
+// Negación unaria
+// Constant: 17
+MOV x0, #17
 STR x0, [SP, #-8]!
 LDR x0, [SP], #8
-STR x0, [SP, #-8]!
-// Print statement
-// Identifier: x
-MOV x0, #0
-ADD x0, sp, x0
-LDR x0, [x0, #0]
+NEG x0, x0
 STR x0, [SP, #-8]!
 LDR x0, [SP], #8
 MOV X0, x0
 BL print_integer
+MOV w0, #10
+STRB w0, [x10]
+MOV x0, #1
+MOV x1, x10
+MOV x2, #1
+MOV w8, #64
+SVC #0
 MOV x0, #0
 MOV x8, #93
 SVC #0
@@ -31,7 +34,7 @@ SVC #0
 // print_integer - Prints a signed integer to stdout
 //
 // Input:
-//   x0 - The integer value to print
+//   x0 - The integer value to pBooleanrint
 //--------------------------------------------------------------
 print_integer:
     // Save registers
@@ -109,9 +112,9 @@ reverse_loop:
     
 print_result:
     // Add newline
-    mov w24, #10               // Newline character
-    strb w24, [x22, x23]       // Add to end of buffer
-    add x23, x23, #1           // Increment counter
+    //mov w24, #10               Newline character
+    //strb w24, [x22, x23]       Add to end of buffer
+    //add x23, x23, #1           Increment counter
     
     // Print the result
     mov x0, #1                 // fd = 1 (stdout)

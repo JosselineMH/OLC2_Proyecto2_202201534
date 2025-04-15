@@ -32,7 +32,7 @@ public class StandardLibrary
 // print_integer - Prints a signed integer to stdout
 //
 // Input:
-//   x0 - The integer value to print
+//   x0 - The integer value to pBooleanrint
 //--------------------------------------------------------------
 print_integer:
     // Save registers
@@ -110,9 +110,9 @@ reverse_loop:
     
 print_result:
     // Add newline
-    mov w24, #10               // Newline character
-    strb w24, [x22, x23]       // Add to end of buffer
-    add x23, x23, #1           // Increment counter
+    //mov w24, #10               Newline character
+    //strb w24, [x22, x23]       Add to end of buffer
+    //add x23, x23, #1           Increment counter
     
     // Print the result
     mov x0, #1                 // fd = 1 (stdout)
@@ -175,7 +175,70 @@ print_done:
     ldp     x19, x20, [sp], #16
     ldp     x29, x30, [sp], #16
     ret
-    " }
+    " },
+
+     { "print_rune", @"
+    .balign 4
+print_rune:
+//--------------------------------------------------------------
+// print_rune - Prints a rune (ASCII char) to stdout
+//
+// Input:
+//   x0 - The rune value to print
+//--------------------------------------------------------------
+    stp x29, x30, [sp, #-16]!   // Save frame pointer and link register
+    sub sp, sp, #16             // Reserve stack space
+    mov x1, sp                  // x1 = address to store rune
+    strb w0, [x1]               // Store rune byte
+    mov x0, #1                  // fd = stdout
+    mov x2, #1                  // length = 1
+    mov w8, #64                 // syscall: write
+    svc #0
+    add sp, sp, #16             // Release stack space
+    ldp x29, x30, [sp], #16     // Restore frame pointer and return
+    ret
+" },
+{ "print_bool", @"
+//--------------------------------------------------------------
+// print_bool - Prints a boolean as 'true' or 'false'
+//
+// Input:
+//   x0 - The boolean value to print (0 = false, != 0 = true)
+//--------------------------------------------------------------
+    .balign 4
+print_bool:
+    stp     x29, x30, [sp, #-16]!
+
+    cmp     x0, #0
+    beq     print_false
+
+    // Print 'true'
+    adr     x1, true_str
+    mov     x2, #4        // length of 'true'
+    b       print_bool_cont
+
+    .balign 4
+print_false:
+    adr     x1, false_str
+    mov     x2, #5        // length of 'false'
+
+print_bool_cont:
+    mov     x0, #1        // fd = stdout
+    mov     w8, #64       // syscall write
+    svc     #0
+
+    ldp     x29, x30, [sp], #16
+    ret
+
+    .balign 4
+true_str:
+    .ascii  ""true""
+
+    .balign 4
+false_str:
+    .ascii  ""false""
+" }
+
 
     };
 }
