@@ -342,9 +342,9 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
         }
         if (left.Type == StackObject.StackObjectType.Int && right.Type == StackObject.StackObjectType.Int)
         {
-            if (op == "*") c.Mul(Register.X0, Register.X0, Register.X1);
-            else if (op == "/") c.Div(Register.X0, Register.X0, Register.X1);
-            else if (op == "%") c.Mod(Register.X0, Register.X0, Register.X1);
+            if (op == "*") c.Mul(Register.X0, Register.X1, Register.X0);
+            else if (op == "/") c.Div(Register.X0, Register.X1, Register.X0);
+            else if (op == "%") c.Mod(Register.X0, Register.X1, Register.X0);
 
             c.Push(Register.X0);
             c.PushObject(c.IntObject());
@@ -915,28 +915,37 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     public override Object? VisitForWhileStmt(LanguageParser.ForWhileStmtContext context)
     {
         c.Comment("For while statement");
-        var startLabel = c.NewLabel("for_start");
+
+        var condLabel = c.NewLabel("for_cond");
+        var bodyLabel = c.NewLabel("for_body");
         var endLabel = c.NewLabel("for_end");
 
         var prevContinueLabel = continueLabel;
         var prevBreakLabel = breakLabel;
-        continueLabel = startLabel;
+
+        continueLabel = condLabel;
         breakLabel = endLabel;
 
-        c.Label(startLabel);
+        c.Label(condLabel);
         Visit(context.expresion());
         c.PopObject(Register.X0);
-        c.Cbz(Register.X0, endLabel);
+        c.Cbz(Register.X0, endLabel); 
+        c.B(bodyLabel); 
+        
+        c.Label(bodyLabel);
         Visit(context.sentencia());
-        c.B(startLabel);
-        c.Label(endLabel);
 
+        c.B(condLabel);
+
+        c.Label(endLabel);
         c.Comment("End of for while statement");
+
         continueLabel = prevContinueLabel;
         breakLabel = prevBreakLabel;
-
         return null;
     }
+
+
 
 
     // VisitForStmt
