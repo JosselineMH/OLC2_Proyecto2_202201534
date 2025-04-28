@@ -3,10 +3,21 @@ using System.Collections.Generic;
 public class StandardLibrary
 {
     private readonly HashSet<string> UsedFunctions = new HashSet<string>();
+    private readonly HashSet<string> UsedSymbols = new HashSet<string>();
 
     public void Use(string function)
     {
         UsedFunctions.Add(function);
+
+        if (function == "print_integer")
+        {
+            UsedSymbols.Add("minus_sign");
+        }
+        else if (function == "print_double")
+        {
+            UsedSymbols.Add("dot_char");
+            UsedSymbols.Add("zero_char");
+        }
     }
 
     public string GetFunctionDefinitions()
@@ -21,8 +32,19 @@ public class StandardLibrary
             }
         }
 
+        var fnDefs = string.Join("\n", functions);
 
-        return string.Join("\n\n", functions);
+        var symbols = new List<string>();
+        foreach (var symbol in UsedSymbols)
+        {
+            if (Symbols.TryGetValue(symbol, out var definition))
+            {
+                symbols.Add(definition);
+            }
+        }
+        var symbolsDefs = string.Join("\n", symbols);
+
+        return fnDefs + "\n" + symbolsDefs;
     }
 
     private readonly static Dictionary<string, string> FunctionDefinitions = new Dictionary<string, string>
@@ -32,7 +54,7 @@ public class StandardLibrary
 // print_integer - Prints a signed integer to stdout
 //
 // Input:
-//   x0 - The integer value to pBooleanrint
+//   x0 - The integer value to print
 //--------------------------------------------------------------
 print_integer:
     // Save registers
@@ -109,11 +131,6 @@ reverse_loop:
     b reverse_loop             // Continue reversing
     
 print_result:
-    // Add newline
-    //mov w24, #10               Newline character
-    //strb w24, [x22, x23]       Add to end of buffer
-    //add x23, x23, #1           Increment counter
-    
     // Print the result
     mov x0, #1                 // fd = 1 (stdout)
     mov x1, x22                // Buffer address
@@ -130,9 +147,7 @@ print_result:
     ldp x19, x20, [sp], #16
     ldp x29, x30, [sp], #16    // Restore frame pointer and link register
     ret                        // Return to caller
-
-minus_sign:
-    .ascii ""-""               // Minus sign"
+    "
     },
 
     { "print_string", @"
@@ -177,7 +192,112 @@ print_done:
     ret
     " },
 
-     { "print_rune", @"
+    {
+        "print_double", @"
+//--------------------------------------------------------------
+// print_double - Prints a double precision float to stdout
+//
+// Input:
+//   d0 - The double value to print
+//--------------------------------------------------------------
+print_double:
+    // Save context
+    stp x29, x30, [sp, #-16]!    
+    stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
+    stp x23, x24, [sp, #-16]!
+    
+    // Check if number is negative
+    fmov x19, d0
+    tst x19, #(1 << 63)       // Comprueba el bit de signo
+    beq skip_minus
+
+    // Print minus sign
+    mov x0, #1
+    adr x1, minus_sign
+    mov x2, #1
+    mov x8, #64
+    svc #0
+
+    // Make value positive
+    fneg d0, d0
+
+skip_minus:
+    // Convert integer part
+    fcvtzs x0, d0             // x0 = int(d0)
+    bl print_integer
+
+    // Print dot '.'
+    mov x0, #1
+    adr x1, dot_char
+    mov x2, #1
+    mov x8, #64
+    svc #0
+
+    // Get fractional part: frac = d0 - float(int(d0))
+    frintm d4, d0             // d4 = floor(d0)
+    fsub d2, d0, d4           // d2 = d0 - floor(d0) (exact fraction)
+
+    // Para 2.5, d2 debe ser exactamente 0.5
+
+    // Multiplicar por 1_000_000 (6 decimales)
+    movz x1, #0x000F, lsl #16
+    movk x1, #0x4240, lsl #0   // x1 = 1000000
+    scvtf d3, x1              // d3 = 1000000.0
+    fmul d2, d2, d3           // d2 = frac * 1_000_000
+    
+    // Redondear al entero más cercano para evitar errores de precisión
+    frintn d2, d2             // d2 = round(d2)
+    fcvtzs x0, d2             // x0 = int(d2)
+
+    // Imprimir ceros a la izquierda si es necesario
+    mov x20, x0               // x20 = fracción entera
+    movz x21, #0x0001, lsl #16
+    movk x21, #0x86A0, lsl #0  // x21 = 100000
+    mov x22, #0               // inicializar contador de ceros
+    mov x23, #10              // constante para división
+
+leading_zero_loop:
+    udiv x24, x20, x21        // x24 = x20 / x21
+    cbnz x24, done_leading_zeros  // Si hay un dígito no cero, salir del bucle
+
+    // Imprimir '0'
+    mov x0, #1
+    adr x1, zero_char
+    mov x2, #1
+    mov x8, #64
+    svc #0
+
+    udiv x21, x21, x23        // x21 /= 10
+    add x22, x22, #1          // incrementar contador de ceros
+    cmp x21, #0               // verificar si llegamos al final
+    beq print_remaining       // si divisor es 0, saltar a imprimir el resto
+    b leading_zero_loop
+
+done_leading_zeros:
+    // Print the remaining fractional part
+    mov x0, x20
+    bl print_integer
+    b exit_function
+
+print_remaining:
+    // Caso especial cuando la parte fraccionaria es 0 después de imprimir ceros
+    cmp x20, #0
+    bne exit_function
+    
+    // Ya imprimimos todos los ceros necesarios
+    // No hace falta imprimir nada más
+
+exit_function:
+    // Restore context
+    ldp x23, x24, [sp], #16
+    ldp x21, x22, [sp], #16
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+    "},
+
+    { "print_rune", @"
     .balign 4
 print_rune:
 //--------------------------------------------------------------
@@ -267,8 +387,11 @@ eq_false:
     ret
 "
 }
-
-
-
+    };
+    private readonly static Dictionary<string, string> Symbols = new Dictionary<string, string>
+    {
+        { "minus_sign", @"minus_sign: .ascii ""-""" },
+        { "dot_char", @"dot_char: .ascii "".""" },
+        { "zero_char", @"zero_char: .ascii ""0""" }
     };
 }

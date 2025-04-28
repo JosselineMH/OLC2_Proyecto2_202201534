@@ -2,14 +2,15 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Text;
 
-public class StackObject  
+
+public class StackObject
 {
-    public enum StackObjectType{Int, Float, String, Rune, Bool}
+    public enum StackObjectType { Int, Float, String, Rune, Bool, Array}
     public StackObjectType Type { get; set; }
     public int Lenght { get; set; }
     public int Depth { get; set; }
     public string? Id { get; set; }
-    
+   public StackObjectType? ElementType { get; set; }
 }
 
 public class ArmGenerator 
@@ -22,6 +23,11 @@ public class ArmGenerator
     private int labelCounter = 0;
 
     //---- stack operations
+
+    public StackObject TopObject()
+    {
+        return stack.Last();
+    }
     public void PushObject(StackObject obj)
     {
         stack.Add(obj);
@@ -32,12 +38,31 @@ public class ArmGenerator
         switch(obj.Type) 
         {
             case StackObject.StackObjectType.Int:
-                Mov(Register.X0, (int)value);
-                Push(Register.X0);
-                break;
+               Mov(Register.X0, (int)value);
+               Push(Register.X0);
+               break;
             case StackObject.StackObjectType.Float:
-               // codigo
-                break;
+               double floatValue = (double)value;
+
+               long floatBits = BitConverter.DoubleToInt64Bits(floatValue);
+
+               ushort[] floatParts = new ushort[4];
+               for (int i = 0; i < 4; i++)
+               {
+                  floatParts[i] = (ushort)((floatBits >> (i * 16)) & 0xFFFF);
+               }
+
+               Instructions.Add($"MOVZ X0, #{floatParts[0]}, LSL #0");
+               for (int i = 1; i < 4; i++)
+               {
+                  Instructions.Add($"MOVK X0, #{floatParts[i]}, LSL #{i * 16}");
+               }
+
+               
+               Push(Register.X0);
+               break;
+
+
             case StackObject.StackObjectType.String:
                 List<byte> stringArray = Utils.StringToByteArray((string)value);
                 Push(Register.HP);
@@ -132,9 +157,17 @@ public class ArmGenerator
       };
    }
 
-
-
-
+   public StackObject ArrayObject(StackObject.StackObjectType elementType)
+   {
+      return new StackObject
+      {
+         Type = StackObject.StackObjectType.Array,
+         Lenght = 16,
+         Depth = depth,
+         Id = null,
+         ElementType = elementType
+      };
+   }
    public StackObject CloneObject(StackObject obj)
    {
       return new StackObject
@@ -219,11 +252,6 @@ public class ArmGenerator
        Instructions.Add($"SDIV {rd}, {rs1}, {rs2}");
     }
 
-    public void Addi(string rd, string rs1, int imm)
-    {
-       Instructions.Add($"ADDI {rd}, {rs1}, #{imm}");
-    }
-
     public void Mod(string rd, string rs1, string rs2)
     {
         Instructions.Add($"UDIV {Register.X9}, {rs1}, {rs2}");     // temp = rs1 / rs2
@@ -290,6 +318,11 @@ public class ArmGenerator
       Instructions.Add($"CMP {rs1}, {rs2}");
    }
 
+   public void Cbz(string rs, string label)
+   {
+      Instructions.Add($"CBZ {rs}, {label}");
+   }
+
    public void Bgt(string label)
    {
       Instructions.Add($"B.GT {label}");
@@ -344,6 +377,41 @@ public class ArmGenerator
    }
 
 
+   // Operaciones con flotantes
+
+   public void Scvtf(string rd, string rs)
+   {
+      Instructions.Add($"SCVTF {rd}, {rs}");
+   }
+
+   public void Fmov(string rd, string rs)
+   {
+      Instructions.Add($"FMOV {rd}, {rs}");
+   }
+
+   public void Fadd(string rd, string rs1, string rs2)
+   {
+      Instructions.Add($"FADD {rd}, {rs1}, {rs2}");
+   }
+
+   public void Fsub(string rd, string rs1, string rs2)
+   {
+      Instructions.Add($"FSUB {rd}, {rs1}, {rs2}");
+   }
+
+   public void Fmul(string rd, string rs1, string rs2)
+   {
+      Instructions.Add($"FMUL {rd}, {rs1}, {rs2}");
+   }
+   public void Fdiv(string rd, string rs1, string rs2)
+   {
+      Instructions.Add($"FDIV {rd}, {rs1}, {rs2}");
+   }
+
+   public void Fcmp(string rd, string rs)
+   {
+      Instructions.Add($"FCMP {rd}, {rs}");
+   }
 
    //-----
 
@@ -382,10 +450,92 @@ public class ArmGenerator
       Instructions.Add($"BL print_bool");
    }
 
+   public void PrintFloat()
+   {
+      stdLib.Use("print_integer");
+      stdLib.Use("print_double");
+      Instructions.Add($"BL print_double");
+   }
+
+   public void PrintArray(string baseAddressRegister, string elementType)
+{
+    Comment("Imprimiendo arreglo");
+   
+    Ldr(Register.X1, baseAddressRegister, -8); 
+
+    Mov(Register.X0, '[');
+    PrintRune(Register.X0);
+    
+    string loopLabel = NewLabel("print_array_loop");
+    string endLabel = NewLabel("print_array_end");
+    string separatorLabel = NewLabel("print_separator");
+    
+
+    Cmp(Register.X1, "0");
+    Beq(endLabel);
+    
+    Mov(Register.X2, 0); 
+
+    Label(loopLabel);
+    
+    Mov(Register.X3, 8);
+    Mul(Register.X4, Register.X2, Register.X3);
+    Add(Register.X4, baseAddressRegister, Register.X4);
+
+    Ldr(Register.X0, Register.X4);
+    
+    switch (elementType)
+    {
+        case "Int":
+            PrintInt(Register.X0);
+            break;
+        case "Float":
+            // PrintFloat(Register.X0);
+            break;
+        case "String":
+            PrintString(Register.X0);
+            break;
+        case "Rune":
+            PrintRune(Register.X0);
+            break;
+        case "Bool":
+            PrintBool(Register.X0);
+            break;
+    }
+
+    Add(Register.X2, Register.X2, "1");
+    
+    Cmp(Register.X2, Register.X1);
+    Beq(endLabel);
+    
+    Mov(Register.X0, ',');
+    PrintRune(Register.X0);
+    Mov(Register.X0, ' ');
+    PrintRune(Register.X0);
+    
+    B(loopLabel);
+
+    Label(endLabel);
+    
+    Mov(Register.X0, ']');
+    PrintRune(Register.X0);
+}
+
+   
 
    public string NewLabel(string baseName)
    {
       return $"{baseName}_{labelCounter++}";
+   }
+
+   public String GetLabel()
+   {
+      return $"L{labelCounter++}";
+   }
+
+   public void SetLabel(string label)
+   {
+      Instructions.Add($"{label}:");
    }
 
 
@@ -395,10 +545,10 @@ public class ArmGenerator
       string loop1 = NewLabel("concat_loop1");
       string loop2 = NewLabel("concat_loop2");
 
-      // Guardar dirección base del nuevo string
+      // Guarda dirección base del nuevo string
       Push(Register.HP);
 
-      // Copiar primer string
+      // Copia primer string
       Instructions.Add($"MOV x2, {left}");
       Instructions.Add($"// Copiar primer string");
       Instructions.Add($"{loop1}:");
@@ -409,7 +559,7 @@ public class ArmGenerator
       Instructions.Add("CMP w3, #0");
       Instructions.Add($"B.NE {loop1}");
 
-      // Copiar segundo string
+      // Copia segundo string
       Instructions.Add($"MOV x2, {right}");
       Instructions.Add("// Copiar segundo string");
       Instructions.Add("SUB x10, x10, #1"); 
@@ -421,7 +571,7 @@ public class ArmGenerator
       Instructions.Add("CMP w3, #0");
       Instructions.Add($"B.NE {loop2}");
 
-      // Recuperar dirección base del resultado
+      // Recupera dirección base del resultado
       Pop(Register.X0);
    }
 

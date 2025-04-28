@@ -229,9 +229,16 @@ export default function Home() {
         
         <div className='mt-4 bg-gray-700 p-4 rounded border border-gray-600'>
           <h2 className='text-xl font-bold mb-2 text-white'>Consola:</h2>
-          <pre className='bg-gray-600 p-2 rounded text-green-200 overflow-auto h-[150px]'>  
+          <pre
+            contentEditable={true}
+            suppressContentEditableWarning={true}
+            tabIndex={0}
+            className='bg-gray-600 p-2 rounded text-green-200 overflow-auto h-[150px] select-text font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-teal-500'
+          >
             {output}
           </pre>
+
+
         </div>
         <div className='mt-4 flex space-x-2 justify-center'>
           <button
