@@ -528,16 +528,6 @@ public class ArmGenerator
       return $"{baseName}_{labelCounter++}";
    }
 
-   public String GetLabel()
-   {
-      return $"L{labelCounter++}";
-   }
-
-   public void SetLabel(string label)
-   {
-      Instructions.Add($"{label}:");
-   }
-
 
    public void ConcatStrings(string left, string right)
    {

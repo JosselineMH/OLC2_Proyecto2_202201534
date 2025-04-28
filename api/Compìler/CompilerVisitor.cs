@@ -10,6 +10,9 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 {
 
     public ArmGenerator c = new ArmGenerator();
+    private String? continueLabel = null;
+    private String? breakLabel = null;
+    private String? returnLabel = null;  
     public CompilerVisitor()
     {
         
@@ -31,10 +34,7 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
         return null;
     }
 
-
-
     // VisitDeclaracionExplicita
-
     public override Object? VisitDeclaracionExplicita(LanguageParser.DeclaracionExplicitaContext context)
     { 
         var varName = context.ID().GetText();
@@ -106,12 +106,7 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
         return null;
     }
 
-
-
-
-
     // VisitDeclaracionImplicita
-
     public override object? VisitDeclaracionImplicita(LanguageParser.DeclaracionImplicitaContext context)
     {
         var varName = context.ID().GetText();
@@ -126,7 +121,6 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
         return null;
     }
-
 
 
     // VisitExprStmt
@@ -216,7 +210,6 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     }
 
     // VisitBlockStmt
-
     public override Object? VisitBlockStmt(LanguageParser.BlockStmtContext context)
     {
         c.Comment("Block statement");
@@ -259,8 +252,6 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
         return null;
     }
 
-
-
     // VisitNumber
     public override Object? VisitNumber(LanguageParser.NumberContext context)
     {
@@ -294,7 +285,6 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
    
     // VisitString
-
    public override Object? VisitString(LanguageParser.StringContext context)
     {
         var value = context.STRING().GetText().Trim('"');
@@ -305,7 +295,6 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     }
 
     // VisitRune
-
    public override object? VisitRune(LanguageParser.RuneContext context)
     {
         var content = context.RUNE().GetText(); 
@@ -417,7 +406,6 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     }
 
     //VisitAssignVar
-    
     public override Object? VisitAssignVar(LanguageParser.AssignVarContext context)
     {
         string varName = context.ID().GetText();
@@ -463,11 +451,8 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
         return null;
     }
-
-    
     
     // VisitRelational
-
     public override object? VisitRelational(LanguageParser.RelationalContext context)
     {
         var op = context.op.Text;
@@ -536,7 +521,6 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
         return null;
     }
-
 
     // VisitEquality
     public override object? VisitEquality(LanguageParser.EqualityContext context)
@@ -647,10 +631,7 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
         return null;
     }
 
-
-
     // VisitLogicalOr
-
     public override object? VisitLogicalOr(LanguageParser.LogicalOrContext context)
     {
         string trueLabel = c.NewLabel("or_true");
@@ -711,8 +692,31 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
 
     // VisitIncrementeDecrement
-    public override Object? VisitIncrementDecrement(LanguageParser.IncrementDecrementContext context)
+    public override object? VisitIncrementDecrement(LanguageParser.IncrementDecrementContext context)
     {
+        var id = context.ID().GetText();
+        var op = context.op.Text;
+
+        c.Comment($"Increment/Decrement variable: {id} {op}");
+
+        var (offset, obj) = c.GetObject(id);
+
+        if (obj.Type != StackObject.StackObjectType.Int)
+            throw new Exception("Increment/Decrement sólo soportado para enteros");
+
+        c.Ldr(Register.X0, Register.FP, offset);
+
+        if (op == "++")
+        {
+            c.Add(Register.X0, Register.X0, "#1");
+        }
+        else if (op == "--")
+        {
+            c.Sub(Register.X0, Register.X0, "#1");
+        }
+
+        c.Str(Register.X0, Register.FP, offset);
+
         return null;
     }
 
@@ -756,7 +760,6 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     
 
     //VisitSliceFuncIndex
-
     public override Object? VisitSliceFuncIndex(LanguageParser.SliceFuncIndexContext context)
     {
         return null;
@@ -790,7 +793,6 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     }
 
     // VisitAssignSlice
-
     public override Object? VisitAssignSlice(LanguageParser.AssignSliceContext context)
     {
         return null;
@@ -827,60 +829,116 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
         return null;
     }
 
-
-
-
     //VisitBreakStmt
-
     public override Object? VisitBreakStmt(LanguageParser.BreakStmtContext context)
     {
+        c.Comment("Break statement");
+        if (breakLabel != null)
+        {
+            c.B(breakLabel);
+        }
         return null;
     }
 
     //VisitContinueStmt
-    
     public override Object? VisitContinueStmt(LanguageParser.ContinueStmtContext context)
     {
+        c.Comment("Continue statement");
+        if (continueLabel != null)
+        {
+            c.B(continueLabel);
+        }
+
         return null;
     }
 
     // VisitReturnStmt
-
     public override Object? VisitReturnStmt(LanguageParser.ReturnStmtContext context)
     {
         return null;
     }
 
     // VisitSwitchStmt
-
     public override Object? VisitSwitchStmt(LanguageParser.SwitchStmtContext context)
     {
         return null;
     }
 
     // VisitForWhileStmt
-
-    public override Object? VisitForWhileStmt([NotNull] LanguageParser.ForWhileStmtContext context)
+    public override Object? VisitForWhileStmt(LanguageParser.ForWhileStmtContext context)
     {
+        c.Comment("For while statement");
+        var startLabel = c.NewLabel("for_start");
+        var endLabel = c.NewLabel("for_end");
+
+        var prevContinueLabel = continueLabel;
+        var prevBreakLabel = breakLabel;
+        continueLabel = startLabel;
+        breakLabel = endLabel;
+
+        c.Label(startLabel);
+        Visit(context.expresion());
+        c.PopObject(Register.X0);
+        c.Cbz(Register.X0, endLabel);
+        Visit(context.sentencia());
+        c.B(startLabel);
+        c.Label(endLabel);
+
+        c.Comment("End of for while statement");
+        continueLabel = prevContinueLabel;
+        breakLabel = prevBreakLabel;
+
         return null;
     }
-
 
 
     // VisitForStmt
-
-    public override Object? VisitForStmt(LanguageParser.ForStmtContext context)
+    public override object? VisitForStmt(LanguageParser.ForStmtContext context)
     {
+        var startLabel = c.NewLabel("for_start");
+        var endLabel = c.NewLabel("for_end");
+        var incrementLabel = c.NewLabel("for_increment");
+
+        var prevContinueLabel = continueLabel;
+        var prevBreakLabel = breakLabel;
+        continueLabel = incrementLabel;
+        breakLabel = endLabel;
+
+        c.Comment("For statement");
+        c.NewScope();
+
+        Visit(context.forInit()); 
+        c.Label(startLabel);
+
+        Visit(context.expresion(0)); 
+        c.PopObject(Register.X0);
+        c.Cbz(Register.X0, endLabel);
+
+        Visit(context.sentencia()); 
+        c.Label(incrementLabel);
+
+        Visit(context.expresion(1)); 
+        c.PopObject(Register.X0);   
+
+        c.B(startLabel);
+        c.Label(endLabel);
+
+        c.Comment("End of for statement");
+
+        var bytesToRemove = c.endScope();
+        if (bytesToRemove > 0)
+        {
+            c.Comment($"Removing {bytesToRemove} bytes from stack");
+            c.Mov(Register.X0, bytesToRemove);
+            c.Add(Register.SP, Register.SP, Register.X0);
+            c.Comment("Stack pointer adjusted");
+        }
+
+        continueLabel = prevContinueLabel;
+        breakLabel = prevBreakLabel;
+
         return null;
     }
-
-/*
-    public void VisitBodyFor(LanguageParser.ForStmtContext context)
-    {
-        return null;
-    }
-*/
-
 
     // VisitForRangeStmt
     public override Object? VisitForRangeStmt(LanguageParser.ForRangeStmtContext context)
@@ -902,7 +960,6 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     }
 
     // VisitdeclaracionFuncForanea
-
     public override Object? VisitDeclaracionFuncForanea(LanguageParser.DeclaracionFuncForaneaContext context)
     {   
         return null;
