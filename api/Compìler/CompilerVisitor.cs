@@ -704,7 +704,7 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
         if (obj.Type != StackObject.StackObjectType.Int)
             throw new Exception("Increment/Decrement sólo soportado para enteros");
 
-        c.Ldr(Register.X0, Register.FP, offset);
+        c.Ldr(Register.X0, Register.SP, offset); 
 
         if (op == "++")
         {
@@ -715,10 +715,10 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
             c.Sub(Register.X0, Register.X0, "#1");
         }
 
-        c.Str(Register.X0, Register.FP, offset);
-
+        c.Str(Register.X0, Register.SP, offset); 
         return null;
     }
+
 
 
     //VisitEmebbedFuncAtoi
@@ -896,34 +896,42 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     public override object? VisitForStmt(LanguageParser.ForStmtContext context)
     {
         var startLabel = c.NewLabel("for_start");
+        var condLabel = c.NewLabel("for_cond");
+        var incrLabel = c.NewLabel("for_incr");
         var endLabel = c.NewLabel("for_end");
-        var incrementLabel = c.NewLabel("for_increment");
 
         var prevContinueLabel = continueLabel;
         var prevBreakLabel = breakLabel;
-        continueLabel = incrementLabel;
+        continueLabel = incrLabel;
         breakLabel = endLabel;
 
-        c.Comment("For statement");
+        c.Comment("For clásico statement");
         c.NewScope();
 
-        Visit(context.forInit()); 
-        c.Label(startLabel);
+        
+        Visit(context.forInit());
+        c.B(condLabel); 
 
-        Visit(context.expresion(0)); 
+        
+        c.Label(startLabel);
+        Visit(context.sentencia());
+
+        
+        c.Label(incrLabel);
+        Visit(context.expresion(1));
+
+        c.B(condLabel);
+
+        
+        c.Label(condLabel);
+        Visit(context.expresion(0));
         c.PopObject(Register.X0);
         c.Cbz(Register.X0, endLabel);
-
-        Visit(context.sentencia()); 
-        c.Label(incrementLabel);
-
-        Visit(context.expresion(1)); 
-        c.PopObject(Register.X0);   
-
         c.B(startLabel);
-        c.Label(endLabel);
 
-        c.Comment("End of for statement");
+        
+        c.Label(endLabel);
+        c.Comment("End of for clásico");
 
         var bytesToRemove = c.endScope();
         if (bytesToRemove > 0)
@@ -939,6 +947,7 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
         return null;
     }
+
 
     // VisitForRangeStmt
     public override Object? VisitForRangeStmt(LanguageParser.ForRangeStmtContext context)
