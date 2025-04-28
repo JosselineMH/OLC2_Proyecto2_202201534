@@ -859,8 +859,55 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     }
 
     // VisitSwitchStmt
-    public override Object? VisitSwitchStmt(LanguageParser.SwitchStmtContext context)
+    public override object? VisitSwitchStmt(LanguageParser.SwitchStmtContext context)
     {
+        c.Comment("Switch statement");
+        
+        Visit(context.expresion());
+        c.PopObject(Register.X9); 
+        
+        var endSwitchLabel = c.NewLabel("switch_end");
+        var prevBreakLabel = breakLabel;
+        breakLabel = endSwitchLabel;
+        
+        var caseCount = context.stmtCase().Length;
+        
+        for (int i = 0; i < caseCount; i++)
+        {
+            var caseContext = context.stmtCase(i);
+            var nextCaseLabel = c.NewLabel($"case_{i+1}");
+            
+            c.Comment($"Case {i+1}");
+            
+            Visit(caseContext.expresion());
+            c.PopObject(Register.X0);
+            
+            c.Cmp(Register.X9, Register.X0);
+            c.Bne(nextCaseLabel);
+            
+            foreach (var stmt in caseContext.dcl())
+            {
+                Visit(stmt);
+            }
+            
+            c.B(endSwitchLabel);
+            c.Label(nextCaseLabel);
+        }
+        
+        if (context.stmtDefault() != null)
+        {
+            c.Comment("Default case");
+            foreach (var stmt in context.stmtDefault().dcl())
+            {
+                Visit(stmt);
+            }
+        }
+        
+        c.Label(endSwitchLabel);
+        c.Comment("End of switch statement");
+        
+        breakLabel = prevBreakLabel;
+        
         return null;
     }
 
