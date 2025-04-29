@@ -418,9 +418,58 @@ atoi_done:
     mov x0, x2          // mover resultado final a x0
     ldp x29, x30, [sp], #16  // restore frame pointer and link register
     ret
+" },
+    { "string_to_float", @"
+//--------------------------------------------------------------
+// string_to_float - Convierte una cadena de caracteres a float64
+// Entrada: x0 = dirección del string null-terminated
+// Salida: d0 = número flotante convertido
+//--------------------------------------------------------------
+.balign 4
+string_to_float:
+    stp x29, x30, [sp, #-16]!  // Save frame pointer and link register
+    mov x1, x0          // x1 = puntero al string
+    mov x2, #0          // x2 = acumulador parte entera
+    mov x4, #0          // x4 = flag de punto decimal (0 = no visto, 1 = visto)
+    mov x5, #1          // x5 = divisor para parte fraccionaria
+    mov x8, #10         // x8 = constante 10
+
+atoi_loop_float:
+    ldrb w6, [x1], #1   // cargar byte y avanzar puntero
+    cmp w6, #0          // fin de string
+    beq atoi_done_float
+
+    cmp w6, #46         // '.' ?
+    beq decimal_point_found
+
+    sub w6, w6, #'0'    // convertir ASCII a número
+    cmp x4, #0
+    beq accumulate_integer_part
+
+    // Parte decimal
+    uxtw x7, w6         // extender w6 a x7
+    mul x7, x5, x7      // multiplicar por el divisor actual
+    add x2, x2, x7      // acumular en x2
+    mul x5, x5, x8      // actualizar divisor *= 10
+    b atoi_loop_float
+
+accumulate_integer_part:
+    uxtw x7, w6         // extender w6 a x7
+    mul x2, x2, x8      // acumulador *= 10
+    add x2, x2, x7      // suma el dígito
+    b atoi_loop_float
+
+decimal_point_found:
+    mov x4, #1          // visto el punto decimal
+    b atoi_loop_float
+
+atoi_done_float:
+    // convertir entero a double
+    scvtf d0, x2         // d0 = float(x2)
+    ldp x29, x30, [sp], #16  // restore frame pointer and link register
+    ret
 
 " }
-
 
     };
     private readonly static Dictionary<string, string> Symbols = new Dictionary<string, string>

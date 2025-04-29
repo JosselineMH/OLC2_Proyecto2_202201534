@@ -4,6 +4,13 @@ using System.Globalization;
 using System.Text;
 using Antlr4.Runtime.Tree;
 using Microsoft.Extensions.Logging.Console;
+using System.Runtime.ExceptionServices;
+
+public class FunctionMetadata
+{
+    public int FrameSize;
+    public StackObject.StackObjectType ReturnType;
+}
 
 
 public class CompilerVisitor : LanguageBaseVisitor<Object?>
@@ -13,6 +20,9 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     private String? continueLabel = null;
     private String? breakLabel = null;
     private String? returnLabel = null;  
+    private Dictionary<string, FunctionMetadata> functions = new Dictionary<string, FunctionMetadata>();
+    private string? insideFunction = null;
+    private int framePointerOffset = 0;
     public CompilerVisitor()
     {
         
@@ -44,7 +54,23 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
         var value = c.PopObject(Register.X0);     
         c.Push(Register.X0);                       
-        c.PushObject(c.CloneObject(value));        
+        c.PushObject(c.CloneObject(value)); 
+
+        if (insideFunction != null)
+        {
+            var localObject = c.GetFrameLocal(framePointerOffset);
+            var valueObject = c.PopObject(Register.X0); // Pop the value as X0
+
+            c.Mov(Register.X1, framePointerOffset * 8); // Move the offset to X1
+            c.Sub(Register.X1, Register.FP, Register.X1); // Add the offset to the FP
+            c.Str(Register.X0, Register.X1); // Store the value at the address
+
+            localObject.Type = valueObject.Type;
+            framePointerOffset++;
+            
+            return null;
+        }
+       
         c.TagObject(varName);                      
 
         return null;
@@ -187,6 +213,20 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
         c.Comment("Identifier: " + id);
 
         var (offset, obj) = c.GetObject(id);
+
+        if (insideFunction != null)
+        {
+            c.Mov(Register.X0, obj.Offset * 8); // Move the offset to X0
+            c.Sub(Register.X0, Register.FP, Register.X0); // Add the offset to FP to get the address
+            c.Ldr(Register.X0, Register.X0); // Load the value from the address
+            c.Push(Register.X0); // Push the value to the stack
+            var cloneObject = c.CloneObject(obj); // Clone the object
+            cloneObject.Id = null;
+            c.PushObject(cloneObject); // Push the object to the stack
+            return null;
+        }
+
+
         c.Mov(Register.X0, offset);
         c.Add(Register.X0, Register.SP, Register.X0);
         c.Ldr(Register.X0, Register.X0);
@@ -417,6 +457,15 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
         var valueObject = c.PopObject(Register.X0);
         var (offset, varObject) = c.GetObject(varName);
+
+        if (insideFunction != null)
+        {
+            c.Mov(Register.X1, varObject.Offset * 8); 
+            c.Sub(Register.X1, Register.FP, Register.X1); 
+            c.Str(Register.X0, Register.X1);
+            return null;
+        }
+
 
         // dirección de la variable
         c.Mov(Register.X1, offset);
@@ -747,6 +796,22 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     //VisitEmbebbedFuncParseFloat
     public override Object? VisitEmebbedFuncParseFloat(LanguageParser.EmebbedFuncParseFloatContext context)
     {
+        Visit(context.expresion());
+
+        var obj = c.PopObject(Register.X0);
+
+        if (obj.Type != StackObject.StackObjectType.String)
+        {
+            throw new Exception("Error: strconv.ParseFloat espera un argumento de tipo string.");
+        }
+
+        c.UseStdLib("string_to_float");
+
+        c.Bl("string_to_float");
+
+        c.Push(Register.D0); 
+        c.PushObject(c.FloatObject());
+
         return null;
     }
 
@@ -870,10 +935,38 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     }
 
     // VisitReturnStmt
-    public override Object? VisitReturnStmt(LanguageParser.ReturnStmtContext context)
+    
+    public override object? VisitReturnStmt(LanguageParser.ReturnStmtContext context)
     {
+        c.Comment("Return statement");
+
+        if (context.expresion() == null)
+        {
+            if(returnLabel != null) c.B(returnLabel); 
+            return null;
+        }
+
+        if (insideFunction == null) 
+            throw new Exception("Return statement outside function");
+
+        Visit(context.expresion()); 
+        c.PopObject(Register.X0); 
+
+        var frameSize = functions[insideFunction].FrameSize;
+        var returnOffset = frameSize - 1;
+
+        c.Mov(Register.X1, returnOffset * 8); 
+        c.Sub(Register.X1, Register.FP, Register.X1); 
+        c.Str(Register.X0, Register.X1); 
+
+        if(returnLabel != null) c.B(returnLabel); 
+
+        c.Comment("End of return statement");
         return null;
     }
+
+
+
 
     // VisitSwitchStmt
     public override object? VisitSwitchStmt(LanguageParser.SwitchStmtContext context)
@@ -963,8 +1056,6 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     }
 
 
-
-
     // VisitForStmt
     public override object? VisitForStmt(LanguageParser.ForStmtContext context)
     {
@@ -1032,19 +1123,202 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     // VisitCallee
     public override Object? VisitCallee(LanguageParser.CalleeContext context)
     {
+        if (context.expresion() is not LanguageParser.IdentifierContext idContext) return null;
+
+        string funcName = idContext.ID().GetText();
+        var call = context.call()[0];
+
+        if (call is not LanguageParser.CallContext callContext) return null;
+
+
+        var postFuncCallLabel = c.GetLabel();
+
+        int baseOffset = 2;
+        int stackElementSize = 8;
+
+        c.Mov(Register.X0, baseOffset * stackElementSize); 
+        c.Sub(Register.SP, Register.SP, Register.X0); 
+
+        if (callContext.args() != null)
+        {
+            c.Comment("Visiting function parameters");
+            foreach (var param in callContext.args().expresion())
+            {
+                Visit(param); 
+            }
+        }
+
+        // Calcular el valor del fp
+        // Regresar el SP al inicio del frame
+        c.Mov(Register.X0, stackElementSize * (baseOffset + callContext.args().expresion().Length)); 
+        c.Add(Register.SP, Register.SP, Register.X0);
+
+        // Calcular la posición donde se almacenará el FP
+        c.Mov(Register.X0, stackElementSize);
+        c.Sub(Register.X0, Register.SP, Register.X0); 
+
+        c.Adr(Register.X1, postFuncCallLabel);
+        c.Push(Register.X1); 
+
+        c.Push(Register.FP); // Guardar el FP anterior
+        c.Add(Register.FP, Register.X0, Register.XZR); // Actualizar el FP
+
+        // Alterar el SP al final del frame
+        int frameSize = functions[funcName].FrameSize;
+        c.Mov(Register.X0, (frameSize - 2) * stackElementSize); 
+        c.Sub(Register.SP, Register.SP, Register.X0); 
+
+        c.Comment("Calling function: " + funcName);
+        c.Bl(funcName);
+        c.Comment("Function call complete");
+        c.SetLabel(postFuncCallLabel); 
+
+        // obtener el valor de retorno
+        var returnOffset = frameSize - 1;
+        c.Mov(Register.X4, returnOffset * stackElementSize); 
+        c.Sub(Register.X4, Register.FP, Register.X4);        
+        c.Ldr(Register.X4, Register.X4);                     
+
+        // 4. Regresar el FP al contexto de ejecución anterior
+        c.Mov(Register.X1, stackElementSize);
+        c.Sub(Register.X1, Register.FP, Register.X1);         
+        c.Ldr(Register.FP, Register.X1);                  
+
+        // 5. Regresar el SP al contexto de ejecución anterior
+        c.Mov(Register.X0, stackElementSize * frameSize);  
+        c.Add(Register.SP, Register.SP, Register.X0);        
+
+        // 6. Regresar el valor de retorno
+        c.Push(Register.X4); 
+        c.PushObject(new StackObject
+        {
+            Type = functions[funcName].ReturnType,
+            Id = null,
+            Offset = 0,
+            Lenght = 8
+        });
+
+        c.Comment("End of function call: " + funcName);
         return null;
     }
 
-    public Object? VisitCall(Invocable invocable, LanguageParser.ArgsContext context)
-    {
-        return null;
-
-    }
-
-    // VisitdeclaracionFuncForanea
+    // VisitdeclaracionFuncForanea  
     public override Object? VisitDeclaracionFuncForanea(LanguageParser.DeclaracionFuncForaneaContext context)
     {   
+        int baseOffset = 2;
+        int paramsOffset = 0;
+
+        if (context.parametros() != null)
+        {
+           paramsOffset = context.parametros().ID().Length;
+        }
+
+        FrameVisitor frameVisitor = new FrameVisitor(baseOffset + paramsOffset);
+
+        foreach (var dcl in context.dcl())
+        {
+            frameVisitor.Visit(dcl);
+        }
+
+        var frame = frameVisitor.Frame;
+        int localOffset = frame.Count;
+        int returnOffset = 1;
+        
+        int totalFrameSize = baseOffset + paramsOffset + localOffset + returnOffset;
+
+        string funcName = context.ID().GetText();
+        StackObject.StackObjectType funcType = GetType(context.tipoDeclaracion().GetText());
+
+        Console.WriteLine("TOTAL FRAME: " + totalFrameSize);
+
+        functions.Add(funcName, new FunctionMetadata
+        {
+            FrameSize = totalFrameSize,
+            ReturnType = funcType
+        });
+
+        var prevInstructions = c.Instructions;
+        c.Instructions = new List<string>();
+
+        var paramCounter = 0;
+
+        for(int i = 0; i < context.parametros().ID().Length; i++)
+        {
+            c.PushObject(new StackObject
+            {
+                Type = GetType(context.parametros().tipoFunc(i).GetText()),
+                Id = context.parametros().ID(i).GetText(),
+                Offset = paramCounter + baseOffset,
+                Lenght = 8
+            });
+            paramCounter++;
+        }
+        
+        foreach (FrameElement element in frame)
+        {
+            c.PushObject(new StackObject
+            {
+                Type = StackObject.StackObjectType.Undefined,
+                Id = element.Name,
+                Offset = element.Offset,
+                Lenght = 8
+            });
+        }
+
+        insideFunction = funcName;
+        framePointerOffset = 0;
+
+        returnLabel = c.GetLabel();
+
+        c.Comment("Function declaration: " + funcName);
+        c.Label(funcName);
+
+        foreach(var dcl in context.dcl())
+        {
+            Visit(dcl);
+        }
+
+        c.Label(returnLabel);
+
+        c.Add(Register.X0, Register.FP, Register.XZR); 
+        c.Ldr(Register.LR, Register.X0);                
+        c.Br(Register.LR);                              
+
+        c.Comment("End of function: " + funcName);
+
+        for(int i =0; i < paramsOffset + localOffset; i++)
+        {
+            c.PopObject();
+        }
+
+
+        foreach (var instruccion in c.Instructions)
+        {
+            c.funcInstructions.Add(instruccion);
+        }
+        c.Instructions = prevInstructions;
+
+        insideFunction = null;
+
         return null;
+
+    }
+
+    StackObject.StackObjectType GetType(string name)
+    {
+        switch (name)
+        {
+            case "int":
+                return StackObject.StackObjectType.Int;
+            case "float":
+                return StackObject.StackObjectType.Float;
+            case "string":
+                return StackObject.StackObjectType.String;
+            case "bool":
+                return StackObject.StackObjectType.Bool;
+            default:
+                throw new ArgumentException("Invalid function type");
+        }
     }
 
 

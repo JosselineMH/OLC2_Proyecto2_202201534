@@ -5,17 +5,23 @@
 
    public class StackObject
    {
-      public enum StackObjectType { Int, Float, String, Rune, Bool, Array}
+      public enum StackObjectType { Int, Float, String, Rune, Bool, Array, Undefined }
       public StackObjectType Type { get; set; }
       public int Lenght { get; set; }
       public int Depth { get; set; }
+
+      public int Offset { get; set; }
       public string? Id { get; set; }
+
+
       public StackObjectType? ElementType { get; set; }
    }
 
    public class ArmGenerator 
    {
-      public readonly List<string> Instructions = new List<string>();
+      /*public readonly List<string> Instructions = new List<string>();*/
+      public List<string> Instructions = new List<string>();
+      public List<string> funcInstructions = new List<string>();
       private readonly StandardLibrary stdLib = new StandardLibrary();
 
       private int depth = 0;
@@ -32,6 +38,24 @@
       {
          stack.Add(obj);
       }
+
+      public void PopObject()
+      {
+         Comment("Popping object from stack");
+         try
+         {
+            stack.RemoveAt(stack.Count - 1);
+            // commentStack(); // Print the stack for debugging
+         }
+         catch (System.Exception)
+         {
+            // commentStack();
+            Console.WriteLine(this.ToString());
+            throw new Exception("Stack is empty");
+         }
+      }
+
+
 
       public void PushConstant(StackObject obj, object value)
       {
@@ -96,10 +120,15 @@
       public StackObject PopObject(string rd)
       {
          var obj = stack.Last();
+         PopObject();
+         Pop(rd);
+         return obj;
+         /*
+         var obj = stack.Last();
          stack.RemoveAt(stack.Count - 1);
 
          Pop(rd);
-         return obj;
+         return obj;*/
       }
 
       public StackObject IntObject()
@@ -227,6 +256,7 @@
             byteOffset += stack[i].Lenght;
          }
 
+         Console.WriteLine(this.ToString());
          throw new Exception($"Object {id} not found");
       }
       //-----
@@ -305,6 +335,17 @@
       {
          Instructions.Add($"LDRB {rd}, [{rs}]");
       }
+
+      public void Adr(string rd, string label)
+      {
+         Instructions.Add($"ADR {rd}, {label}");
+      }
+
+      public void Br(string register)
+      {
+         Instructions.Add($"BR {register}");
+      }
+
 
       //negacion unaria 
       public void Neg(string rd, string rs)
@@ -523,11 +564,20 @@
 
       
 
-      public string NewLabel(string baseName)
-      {
-         return $"{baseName}_{labelCounter++}";
-      }
+   public string NewLabel(string baseName)
+   {
+      return $"{baseName}_{labelCounter++}";      
+   }
 
+   public String GetLabel()
+   {
+      return $"L{labelCounter++}";
+   }
+
+   public void SetLabel(string label)
+   {
+      Instructions.Add($"{label}:");
+   }
 
       public void ConcatStrings(string left, string right)
       {
@@ -601,10 +651,19 @@
             sb.AppendLine(instruction);
          }
 
+         sb.AppendLine("\n\n\n// Foreign Functions");
+         funcInstructions.ForEach(i => sb.AppendLine(i));
 
          sb.AppendLine("\n\n\n// Standard Library Functions");
          sb.AppendLine(stdLib.GetFunctionDefinitions());
 
          return sb.ToString();
       }
+
+      public StackObject GetFrameLocal(int index)
+      {
+         var obj = stack.Where(o => o.Type == StackObject.StackObjectType.Undefined).ToList()[index];
+         return obj;
+      }
+
    }
