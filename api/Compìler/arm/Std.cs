@@ -386,7 +386,42 @@ eq_false:
     mov x0, #0
     ret
 "
-}
+},
+    { "string_to_integer", @"
+   //--------------------------------------------------------------
+// string_to_integer - Convierte una cadena de dígitos en un entero
+//
+// Input:
+//   x0 - dirección del string null-terminated
+// Output:
+//   x0 - valor entero convertido
+//--------------------------------------------------------------
+    .balign 4
+string_to_integer:
+    stp x29, x30, [sp, #-16]!  // Save frame pointer and link register
+    mov x1, x0          // x1 = pointer al string
+    mov x2, #0          // x2 = resultado
+    mov x3, #10         // x3 = constante 10
+
+atoi_loop:
+    ldrb w4, [x1], #1   // cargar byte y avanzar puntero
+    cmp w4, #0          // ¿es null terminator?
+    beq atoi_done
+
+    sub w4, w4, #'0'    // convertir ASCII a valor numérico
+    mul x2, x2, x3      // resultado *= 10
+    add x2, x2, w4, uxtw    // resultado += dígito (corrección aquí)
+
+    b atoi_loop
+
+atoi_done:
+    mov x0, x2          // mover resultado final a x0
+    ldp x29, x30, [sp], #16  // restore frame pointer and link register
+    ret
+
+" }
+
+
     };
     private readonly static Dictionary<string, string> Symbols = new Dictionary<string, string>
     {

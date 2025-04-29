@@ -722,10 +722,27 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
 
     //VisitEmebbedFuncAtoi
-    public override Object? VisitEmebbedFuncAtoi(LanguageParser.EmebbedFuncAtoiContext context)
+    public override object? VisitEmebbedFuncAtoi(LanguageParser.EmebbedFuncAtoiContext context)
     {
-       return null;
+        Visit(context.expresion());
+
+        var obj = c.PopObject(Register.X0);
+
+        if (obj.Type != StackObject.StackObjectType.String)
+        {
+            throw new Exception("Error: strconv.Atoi espera un argumento de tipo string.");
+        }
+
+        c.UseStdLib("string_to_integer");
+        c.Bl("string_to_integer");
+
+        c.Push(Register.X0); 
+        c.PushObject(c.IntObject());
+
+        return null;
     }
+
+
 
     //VisitEmbebbedFuncParseFloat
     public override Object? VisitEmebbedFuncParseFloat(LanguageParser.EmebbedFuncParseFloatContext context)
@@ -931,7 +948,7 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
         c.PopObject(Register.X0);
         c.Cbz(Register.X0, endLabel); 
         c.B(bodyLabel); 
-        
+
         c.Label(bodyLabel);
         Visit(context.sentencia());
 
