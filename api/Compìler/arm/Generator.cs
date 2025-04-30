@@ -658,7 +658,6 @@
       {
          var sb = new StringBuilder();
          sb.AppendLine(".data");
-           // Definir las cadenas de tipo
          sb.AppendLine("int_type: .asciz \"int\"");
          sb.AppendLine("float64_type: .asciz \"float64\"");
          sb.AppendLine("string_type: .asciz \"string\"");
