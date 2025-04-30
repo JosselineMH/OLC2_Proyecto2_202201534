@@ -895,8 +895,87 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     }
 
     //VisitSliceFuncIndex
-    public override Object? VisitSliceFuncIndex(LanguageParser.SliceFuncIndexContext context)
+    public override object? VisitSliceFuncIndex(LanguageParser.SliceFuncIndexContext context)
     {
+        string id = context.ID().GetText();
+        
+        var (byteOffset, sliceObject) = c.GetObject(id);
+        
+        if (sliceObject.Type != StackObject.StackObjectType.Array)
+        {
+            throw new Exception($"{id} no es un slice");
+        }
+        
+        c.Comment($"[Func] slices.Index({id}, valor)");
+        
+        Visit(context.expresion());
+        c.PopObject(Register.X1); 
+        
+        c.Mov(Register.X9, Register.SP);
+        c.Add(Register.X9, Register.X9, $"#{byteOffset}");
+        c.Ldr(Register.X0, Register.X9);  
+        
+
+        c.Ldr(Register.X2, Register.X0);  
+        
+        c.Mov(Register.X3, -1);  
+
+        c.Mov(Register.X4, 0); 
+
+        string loopLabel = c.NewLabel("index_loop");
+        string foundLabel = c.NewLabel("index_found");
+        string notFoundLabel = c.NewLabel("index_not_found");
+        string endLabel = c.NewLabel("index_end");
+        
+        c.Cmp(Register.X2, "#0");
+        c.Beq(notFoundLabel);
+
+        c.SetLabel(loopLabel);
+        
+        c.Push(Register.X0);  
+        c.Push(Register.X1);  
+        c.Push(Register.X2);  
+        c.Push(Register.X3);  
+        c.Push(Register.X4);  
+        
+        c.Mov(Register.X5, 8);
+        c.Mul(Register.X5, Register.X4, Register.X5);
+        c.Add(Register.X5, Register.X5, "#8");  
+        c.Add(Register.X5, Register.X0, Register.X5);
+        
+        c.Ldr(Register.X6, Register.X5);
+        
+        c.Cmp(Register.X6, Register.X1);
+        
+        c.Pop(Register.X4);  
+        c.Pop(Register.X3);  
+        c.Pop(Register.X2);  
+        c.Pop(Register.X1);  
+        c.Pop(Register.X0); 
+        
+        c.Beq(foundLabel);
+
+        c.Add(Register.X4, Register.X4, "#1");
+        c.Cmp(Register.X4, Register.X2);
+        c.Blt(loopLabel);  
+      
+        c.B(notFoundLabel);
+        
+
+        c.SetLabel(foundLabel);
+        c.Mov(Register.X3, Register.X4);
+        c.B(endLabel);
+
+        c.SetLabel(notFoundLabel);
+        c.Mov(Register.X3, -1);
+        
+        c.SetLabel(endLabel);
+        c.Mov(Register.X0, Register.X3);
+        c.Push(Register.X0);
+  
+        var resultObject = c.IntObject();
+        c.PushObject(resultObject);
+        
         return null;
     }
 
@@ -1130,9 +1209,6 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
         c.Comment("End of return statement");
         return null;
     }
-
-
-
 
     // VisitSwitchStmt
     public override object? VisitSwitchStmt(LanguageParser.SwitchStmtContext context)
@@ -1522,7 +1598,6 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
                 throw new ArgumentException("Invalid function type");
         }
     }
-
 
 }
 
