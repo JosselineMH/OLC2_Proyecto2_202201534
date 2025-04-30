@@ -9,12 +9,9 @@
       public StackObjectType Type { get; set; }
       public int Lenght { get; set; }
       public int Depth { get; set; }
-
       public int Offset { get; set; }
       public string? Id { get; set; }
-
-
-      public StackObjectType? ElementType { get; set; }
+      public StackObjectType ElementType { get; set; }
    }
 
    public class ArmGenerator 
@@ -110,8 +107,6 @@
                   Mov(Register.X0, ((bool)value) ? 1 : 0);
                   Push(Register.X0);
                   break;
-
-
          }
 
          PushObject(obj);
@@ -186,17 +181,18 @@
          };
       }
 
-      public StackObject ArrayObject(StackObject.StackObjectType elementType)
+      public StackObject SliceObject(StackObject.StackObjectType elementType)
       {
          return new StackObject
          {
             Type = StackObject.StackObjectType.Array,
-            Lenght = 16,
+            ElementType = elementType,
+            Lenght = 8,
             Depth = depth,
-            Id = null,
-            ElementType = elementType
+            Id = null
          };
       }
+
       public StackObject CloneObject(StackObject obj)
       {
          return new StackObject
@@ -207,7 +203,6 @@
             Id = obj.Id
          };
       }
-
       //-----
 
       //---- Enviroment operations
@@ -497,72 +492,97 @@
          stdLib.Use("print_double");
          Instructions.Add($"BL print_double");
       }
+   
 
-      public void PrintArray(string baseAddressRegister, string elementType)
+   public void PrintSlice(StackObject.StackObjectType elementType)
    {
-      Comment("Imprimiendo arreglo");
-      
-      Ldr(Register.X1, baseAddressRegister, -8); 
+      int labelId = labelCounter++;
+      string labelLoop = $"imprimir_elementos_arreglo_{labelId}";
+      string labelEmpty = $"arreglo_vacio_{labelId}";
+      string labelEnd = $"terminar_arreglo_{labelId}";
 
-      Mov(Register.X0, '[');
-      PrintRune(Register.X0);
-      
-      string loopLabel = NewLabel("print_array_loop");
-      string endLabel = NewLabel("print_array_end");
-      string separatorLabel = NewLabel("print_separator");
-      
+      Mov("x3", "x0"); 
 
-      Cmp(Register.X1, "0");
-      Beq(endLabel);
-      
-      Mov(Register.X2, 0); 
+      Mov("w0", (int)'[');
+      PrintRune("x0");
 
-      Label(loopLabel);
-      
-      Mov(Register.X3, 8);
-      Mul(Register.X4, Register.X2, Register.X3);
-      Add(Register.X4, baseAddressRegister, Register.X4);
+      Ldr("x1", "x3");
+      Cmp("x1", "#0");
+      Beq(labelEmpty);
 
-      Ldr(Register.X0, Register.X4);
-      
+      Mov("x2", 0);
+
+      Label(labelLoop);
+
+      Push("x1");
+      Push("x2");
+      Push("x3");
+
+      Cmp("x2", "#0");
+      Beq($"skip_coma_{labelId}");
+
+      Mov("w0", (int)',');
+      PrintRune("x0");
+      Mov("w0", (int)' ');
+      PrintRune("x0");
+
+      Label($"skip_coma_{labelId}");
+
+      Pop("x3");
+      Pop("x2");
+      Pop("x1");
+
+      Push("x1");
+      Push("x2");
+      Push("x3");
+
+      Mov("x4", 8);
+      Mul("x4", "x2", "x4");
+      Add("x4", "x4", "#8");
+      Add("x4", "x3", "x4");
+
+
+      Ldr("x0", "x4");
+
       switch (elementType)
       {
-         case "Int":
-               PrintInt(Register.X0);
+         case StackObject.StackObjectType.Int:
+               PrintInt("x0");
                break;
-         case "Float":
-               // PrintFloat(Register.X0);
+         case StackObject.StackObjectType.String:
+               PrintString("x0");
                break;
-         case "String":
-               PrintString(Register.X0);
+         case StackObject.StackObjectType.Bool:
+               PrintBool("x0");
                break;
-         case "Rune":
-               PrintRune(Register.X0);
+         case StackObject.StackObjectType.Rune:
+               PrintRune("x0");
                break;
-         case "Bool":
-               PrintBool(Register.X0);
+         case StackObject.StackObjectType.Float:
+               Mov("d0", "x0");
+               PrintFloat();
                break;
       }
 
-      Add(Register.X2, Register.X2, "1");
-      
-      Cmp(Register.X2, Register.X1);
-      Beq(endLabel);
-      
-      Mov(Register.X0, ',');
-      PrintRune(Register.X0);
-      Mov(Register.X0, ' ');
-      PrintRune(Register.X0);
-      
-      B(loopLabel);
 
-      Label(endLabel);
-      
-      Mov(Register.X0, ']');
-      PrintRune(Register.X0);
+      Pop("x3");
+      Pop("x2");
+      Pop("x1");
+
+
+      Add("x2", "x2", "#1");
+
+
+      Cmp("x2", "x1");
+      Blt(labelLoop);
+
+      Label(labelEmpty);
+      Label(labelEnd);
+
+      Mov("w0", (int)']');
+      PrintRune("x0");
    }
-
-      
+   
 
    public string NewLabel(string baseName)
    {
@@ -644,6 +664,7 @@
          sb.AppendLine(".global _start");
          sb.AppendLine("_start:");
          sb.AppendLine("    adr x10, heap");
+
 
          EndProgram();
          foreach (var instruction in Instructions)

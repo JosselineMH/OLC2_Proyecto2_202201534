@@ -5,6 +5,7 @@ using System.Text;
 using Antlr4.Runtime.Tree;
 using Microsoft.Extensions.Logging.Console;
 using System.Runtime.ExceptionServices;
+using System.Linq.Expressions;
 
 public class FunctionMetadata
 {
@@ -188,17 +189,7 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
                     c.PrintBool(Register.X0);
                     break;
                 case StackObject.StackObjectType.Array:
-                    string elementTypeStr = value.ElementType switch
-                    {
-                        StackObject.StackObjectType.Int => "Int",
-                        StackObject.StackObjectType.Float => "Float",
-                        StackObject.StackObjectType.String => "String",
-                        StackObject.StackObjectType.Rune => "Rune",
-                        StackObject.StackObjectType.Bool => "Bool",
-                        _ => throw new Exception($"Tipo de elemento no soportado: {value.ElementType}")
-                    };
-                    
-                    c.PrintArray(Register.X0, elementTypeStr);
+                    c.PrintSlice(value.ElementType);
                     break;
             }
         }
@@ -831,15 +822,77 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     // VisitDeclaracionSliceValores
     public override Object? VisitDeclaracionSliceValores(LanguageParser.DeclaracionSliceValoresContext context)
     {
+        string id = context.ID().GetText();
+        Visit(context.expresion());
+
+        c.TagObject(id);
+
         return null;
-    }       
+    }   
 
     // VisitSliceLiteral
-    public override Object? VisitSliceLiteral(LanguageParser.SliceLiteralContext context)
+    public override object? VisitSliceLiteral(LanguageParser.SliceLiteralContext context)
     {
+        var sliceType = ResolveSliceType(context.tipoDeclaracion().GetText());
+        var elements = context.expresion();
+        var elementCount = elements.Length;
+
+        c.Comment($"[Slice] Creating slice of type {sliceType} with {elementCount} elements");
+
+        var baseAddress = AllocateSliceHeader(elementCount);
+        FillSliceElements(elements, baseAddress);
+
+        var sliceObject = c.SliceObject(sliceType);
+        c.PushObject(sliceObject);
+
         return null;
     }
-    
+
+    private StackObject.StackObjectType ResolveSliceType(string typeStr) => typeStr switch
+    {
+        "int"     => StackObject.StackObjectType.Int,
+        "float64" => StackObject.StackObjectType.Float,
+        "string"  => StackObject.StackObjectType.String,
+        "bool"    => StackObject.StackObjectType.Bool,
+        "rune"    => StackObject.StackObjectType.Rune,
+        _         => throw new Exception($"Unsupported slice type: {typeStr}")
+    };
+
+    private string AllocateSliceHeader(int count)
+    {
+        c.Push(Register.HP);              
+        c.Mov(Register.X0, count);
+        c.Str(Register.X0, Register.HP);  
+        c.Mov(Register.X0, 8);
+        c.Add(Register.HP, Register.HP, Register.X0); 
+
+        c.Pop(Register.X1);  
+        c.Push(Register.X1); 
+
+        return Register.X1;
+    }
+
+    private void FillSliceElements(IReadOnlyList<LanguageParser.ExpresionContext> elements, string baseAddress)
+    {
+        for (int i = 0; i < elements.Count; i++)
+        {
+            c.Comment($"[Slice] Processing element {i}");
+
+            Visit(elements[i]);
+            c.PopObject(Register.X0); 
+
+            c.Mov(Register.X2, 8);           
+            c.Mov(Register.X3, i);
+            c.Mul(Register.X3, Register.X3, Register.X2);
+            c.Add(Register.X3, Register.X3, "8"); 
+            c.Add(Register.X3, baseAddress, Register.X3);
+            c.Str(Register.X0, Register.X3);      
+        }
+
+        var totalSize = elements.Count * 8;
+        c.Mov(Register.X0, totalSize);
+        c.Add(Register.HP, Register.HP, Register.X0); 
+    }
 
     //VisitSliceFuncIndex
     public override Object? VisitSliceFuncIndex(LanguageParser.SliceFuncIndexContext context)
@@ -1231,7 +1284,7 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     }
 
 
-   //VisitDeclaracionFuncForanea
+    //VisitDeclaracionFuncForanea
     public override Object? VisitDeclaracionFuncForanea(LanguageParser.DeclaracionFuncForaneaContext context)
     {
         int baseOffset = 2;

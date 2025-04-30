@@ -88,4 +88,15 @@ public class FrameVisitor : LanguageBaseVisitor<Object?>
         return null;
     }
 
+    public override Object? VisitDeclaracionFuncForanea(LanguageParser.DeclaracionFuncForaneaContext context)
+    {
+        foreach (var dcl in context.dcl())
+        {
+            Visit(dcl); 
+        }
+
+        return null;
+    }
+
+
 }
