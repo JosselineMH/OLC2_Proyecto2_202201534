@@ -922,14 +922,127 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     }
 
     // VisitSliceAccess
-    public override Object? VisitSliceAccess(LanguageParser.SliceAccessContext context)
+    public override object? VisitSliceAccess(LanguageParser.SliceAccessContext context)
     {
+        string id = context.ID().GetText();
+        
+        var (byteOffset, sliceObject) = c.GetObject(id);
+        
+        if (sliceObject.Type != StackObject.StackObjectType.Array)
+        {
+            throw new Exception($"{id} no es un slice");
+        }
+        
+        c.Comment($"[Slice] Accediendo a elemento de slice {id}");
+        
+        Visit(context.expresion());
+        
+        c.PopObject(Register.X1);
+        
+        c.Mov(Register.X9, Register.SP);
+        c.Add(Register.X9, Register.X9, $"#{byteOffset}");
+        c.Ldr(Register.X0, Register.X9);
+        
+        c.Ldr(Register.X2, Register.X0);  
+        c.Cmp(Register.X1, Register.X2);
+        string errorLabel = c.NewLabel("index_out_of_bounds");
+        string continueLabel = c.NewLabel("index_ok");
+        c.Bge(errorLabel);
+        c.Cmp(Register.X1, "#0");
+        c.Blt(errorLabel);
+        c.B(continueLabel);
+
+        c.SetLabel(errorLabel);
+
+        c.Mov(Register.X0, 1); 
+        c.Mov(Register.X8, 93); 
+        c.Svc();
+        
+        c.SetLabel(continueLabel);
+        
+        c.Mov(Register.X3, 8);
+        c.Mul(Register.X3, Register.X1, Register.X3);
+        c.Add(Register.X3, Register.X3, "#8"); 
+        c.Add(Register.X3, Register.X0, Register.X3);
+        
+        c.Ldr(Register.X0, Register.X3);
+        c.Push(Register.X0);
+        
+        var elementObject = CreateElementObject(sliceObject.ElementType);
+        c.PushObject(elementObject);
+        
         return null;
     }
 
-    // VisitAssignSlice
-    public override Object? VisitAssignSlice(LanguageParser.AssignSliceContext context)
+    private StackObject CreateElementObject(StackObject.StackObjectType type)
     {
+        switch (type)
+        {
+            case StackObject.StackObjectType.Int:
+                return c.IntObject();
+            case StackObject.StackObjectType.Float:
+                return c.FloatObject();
+            case StackObject.StackObjectType.String:
+                return c.StringObject();
+            case StackObject.StackObjectType.Bool:
+                return c.BoolObject();
+            case StackObject.StackObjectType.Rune:
+                return c.RuneObject();
+            default:
+                throw new Exception($"Tipo de elemento no soportado: {type}");
+        }
+    }
+
+    // VisitAssignSlice
+    public override object? VisitAssignSlice(LanguageParser.AssignSliceContext context)
+    {
+        string id = context.ID().GetText();
+        
+        var (byteOffset, sliceObject) = c.GetObject(id);
+        
+        if (sliceObject.Type != StackObject.StackObjectType.Array)
+        {
+            throw new Exception($"{id} no es un slice");
+        }
+        
+        c.Comment($"[Slice] Asignando valor a elemento de slice {id}");
+        
+        Visit(context.indice);
+        c.PopObject(Register.X1);  
+        
+        c.Mov(Register.X9, Register.SP);
+        c.Add(Register.X9, Register.X9, $"#{byteOffset}");
+        c.Ldr(Register.X0, Register.X9);
+        c.Push(Register.X0);  
+        
+        c.Ldr(Register.X2, Register.X0); 
+        c.Cmp(Register.X1, Register.X2);
+        string errorLabel = c.NewLabel("assign_index_out_of_bounds");
+        string continueLabel = c.NewLabel("assign_index_ok");
+        c.Bge(errorLabel);
+        c.Cmp(Register.X1, "#0");
+        c.Blt(errorLabel);
+        c.B(continueLabel);
+        
+        c.SetLabel(errorLabel);
+        c.Mov(Register.X0, 1);  
+        c.Mov(Register.X8, 93);
+        c.Svc();
+        
+        c.SetLabel(continueLabel);
+        
+        Visit(context.valor);
+        c.PopObject(Register.X0);  
+
+        c.Pop(Register.X3);
+        
+        c.Mov(Register.X4, 8);
+        c.Mul(Register.X4, Register.X1, Register.X4);
+        c.Add(Register.X4, Register.X4, "#8");  
+        c.Add(Register.X4, Register.X3, Register.X4);
+        
+        c.Str(Register.X0, Register.X4);
+        
         return null;
     }
 
