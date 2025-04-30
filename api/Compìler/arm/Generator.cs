@@ -654,11 +654,22 @@
          Instructions.Add("SVC #0");
       }
 
-   
       public override string ToString()
       {
          var sb = new StringBuilder();
          sb.AppendLine(".data");
+           // Definir las cadenas de tipo
+         sb.AppendLine("int_type: .asciz \"int\"");
+         sb.AppendLine("float64_type: .asciz \"float64\"");
+         sb.AppendLine("string_type: .asciz \"string\"");
+         sb.AppendLine("bool_type: .asciz \"bool\"");
+         sb.AppendLine("rune_type: .asciz \"rune\"");
+         sb.AppendLine("slice_int_type: .asciz \"[]int\"");
+         sb.AppendLine("slice_float64_type: .asciz \"[]float64\"");
+         sb.AppendLine("slice_string_type: .asciz \"[]string\"");
+         sb.AppendLine("slice_bool_type: .asciz \"[]bool\"");
+         sb.AppendLine("slice_rune_type: .asciz \"[]rune\"");
+         sb.AppendLine("slice_any_type: .asciz \"[]any\"");
          sb.AppendLine("heap: .space 4096");
          sb.AppendLine(".text");
          sb.AppendLine(".global _start");

@@ -787,29 +787,73 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
     //VisitEmbebbedFuncParseFloat
     public override Object? VisitEmebbedFuncParseFloat(LanguageParser.EmebbedFuncParseFloatContext context)
     {
-        Visit(context.expresion());
-
-        var obj = c.PopObject(Register.X0);
-
-        if (obj.Type != StackObject.StackObjectType.String)
-        {
-            throw new Exception("Error: strconv.ParseFloat espera un argumento de tipo string.");
-        }
-
-        c.UseStdLib("string_to_float");
-
-        c.Bl("string_to_float");
-
-        c.Push(Register.D0); 
-        c.PushObject(c.FloatObject());
-
         return null;
     }
 
     // VisitEmebbedFuncTypeOf
-
     public override Object? VisitEmebbedFuncTypeOf(LanguageParser.EmebbedFuncTypeOfContext context)
     {
+        Visit(context.expresion());
+        
+        var expr = c.TopObject();
+        c.Comment("Generando reflect.TypeOf");
+
+        c.Pop(Register.X0);
+        
+        string tipoStr;
+        
+        switch (expr.Type)
+        {
+            case StackObject.StackObjectType.Int:
+                tipoStr = "int_type";
+                break;
+            case StackObject.StackObjectType.Float:
+                tipoStr = "float64_type";
+                break;
+            case StackObject.StackObjectType.String:
+                tipoStr = "string_type";
+                break;
+            case StackObject.StackObjectType.Bool:
+                tipoStr = "bool_type";
+                break;
+            case StackObject.StackObjectType.Rune:
+                tipoStr = "rune_type";
+                break;
+            case StackObject.StackObjectType.Array:
+                switch (expr.ElementType)
+                {
+                    case StackObject.StackObjectType.Int:
+                        tipoStr = "slice_int_type";
+                        break;
+                    case StackObject.StackObjectType.Float:
+                        tipoStr = "slice_float64_type";
+                        break;
+                    case StackObject.StackObjectType.String:
+                        tipoStr = "slice_string_type";
+                        break;
+                    case StackObject.StackObjectType.Bool:
+                        tipoStr = "slice_bool_type";
+                        break;
+                    case StackObject.StackObjectType.Rune:
+                        tipoStr = "slice_rune_type";
+                        break;
+                    default:
+                        tipoStr = "slice_any_type";
+                        break;
+                }
+                break;
+            default:
+                tipoStr = "unknown_type";
+                break;
+        }
+        
+        c.PopObject();
+        
+        c.Adr(Register.X0, tipoStr);
+        
+        c.PushObject(c.StringObject());
+        c.Push(Register.X0);
+        
         return null;
     }
 
@@ -1008,10 +1052,11 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
 
     // VisitSliceAppendFunc
-    public override Object? VisitSliceAppendFunc(LanguageParser.SliceAppendFuncContext context)
+    public override object? VisitSliceAppendFunc(LanguageParser.SliceAppendFuncContext context)
     {
         return null;
     }
+
 
     // VisitSliceAccess
     public override object? VisitSliceAccess(LanguageParser.SliceAccessContext context)
@@ -1369,10 +1414,95 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
 
     // VisitForRangeStmt
-    public override Object? VisitForRangeStmt(LanguageParser.ForRangeStmtContext context)
+public override object? VisitForRangeStmt(LanguageParser.ForRangeStmtContext context)
+{
+    string indiceId = context.indice.Text;
+    string valorId = context.valor.Text;
+    string sliceId = context.ident.Text;
+
+    c.Comment($"For range sobre slice {sliceId}");
+    c.NewScope();
+
+    var (byteOffset, sliceObj) = c.GetObject(sliceId);
+    if (sliceObj.Type != StackObject.StackObjectType.Array)
+        throw new Exception($"La variable {sliceId} no es un slice");
+
+    // Declaramos y registramos las variables del for
+    var indexVar = c.IntObject(); indexVar.Id = indiceId; c.PushObject(indexVar);
+    var valueVar = c.CloneObject(CreateElementObject(sliceObj.ElementType)); valueVar.Id = valorId; c.PushObject(valueVar);
+
+    var startLabel = c.NewLabel("for_range_start");
+    var condLabel = c.NewLabel("for_range_cond");
+    var endLabel = c.NewLabel("for_range_end");
+
+    var prevContinue = continueLabel;
+    var prevBreak = breakLabel;
+    continueLabel = condLabel;
+    breakLabel = endLabel;
+
+    // x20 -> base del slice
+    c.Mov("x9", Register.SP);
+    c.Add("x9", "x9", $"#{byteOffset}");
+    c.Ldr("x20", "x9");
+
+    // x21 -> longitud del slice
+    c.Ldr("x21", "x20");
+
+    // x22 -> índice
+    c.Mov("x22", 0);
+
+    c.Label(condLabel);
+    c.Cmp("x22", "x21");
+    c.Bge(endLabel);
+
+    c.Label(startLabel);
+
+    // Guardar índice en variable
+    c.Mov("x0", "x22");
+    var (idxOffset, _) = c.GetObject(indiceId);
+    c.Mov("x1", idxOffset);
+    c.Add("x1", Register.SP, "x1");
+    c.Str("x0", "x1");
+
+    // Calcular dirección del valor
+    c.Mov("x4", 8);
+    c.Mul("x4", "x22", "x4");
+    c.Add("x4", "x4", "#8");  // desplazamiento para datos (después del len)
+    c.Add("x4", "x20", "x4");
+    c.Ldr("x0", "x4");
+
+    // Guardar valor en variable
+    var (valOffset, _) = c.GetObject(valorId);
+    c.Mov("x1", valOffset);
+    c.Add("x1", Register.SP, "x1");
+    c.Str("x0", "x1");
+
+    // Ejecutar cuerpo del for
+    Visit(context.sentencia());
+
+    // Incrementar índice
+    c.Add("x22", "x22", "#1");
+    c.B(condLabel);
+
+    c.Label(endLabel);
+    c.Comment("Fin de for range");
+
+    int bytesToRemove = c.endScope();
+    if (bytesToRemove > 0)
     {
-        return null;
+        c.Mov("x0", bytesToRemove);
+        c.Add(Register.SP, Register.SP, "x0");
     }
+
+    continueLabel = prevContinue;
+    breakLabel = prevBreak;
+
+    return null;
+}
+
+
+
+
 
 
     //VisitCallee
