@@ -981,15 +981,28 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
 
     // VisitSliceStringFuncJoin
-    public override Object? VisitSliceStringFuncJoin(LanguageParser.SliceStringFuncJoinContext context)
+    public override object? VisitSliceStringFuncJoin(LanguageParser.SliceStringFuncJoinContext context)
     {
-        return null;
+       return null;
     }
 
 
     // VisitSliceLenFunc
-    public override Object? VisitSliceLenFunc(LanguageParser.SliceLenFuncContext context)
+    public override object? VisitSliceLenFunc(LanguageParser.SliceLenFuncContext context)
     {
+        c.Comment("Getting length of slice");
+        
+        Visit(context.expresion());
+        
+        c.PopObject(Register.X0);
+        
+        c.Ldr(Register.X0, Register.X0);
+        
+        c.Push(Register.X0);
+
+        var intObject = c.IntObject();
+        c.PushObject(intObject);
+        
         return null;
     }
 
