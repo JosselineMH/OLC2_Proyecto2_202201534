@@ -390,6 +390,7 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
 
 
     // VisitAddSub
+    /*
     public override Object? VisitAddSub(LanguageParser.AddSubContext context)
     {
         var op = context.op.Text;
@@ -434,7 +435,63 @@ public class CompilerVisitor : LanguageBaseVisitor<Object?>
         }
 
         return null;
+    }*/
+
+    public override Object? VisitAddSub(LanguageParser.AddSubContext context)
+{
+    var op = context.op.Text;
+    c.Comment($"Operación: {op}");
+
+    // Visitar expresiones hijas (evaluar operandos)
+    Visit(context.expresion(0));
+    Visit(context.expresion(1));
+
+    // Revisar tipo del operando derecho (en tope del stack)
+    var isRightFloat = c.TopObject().Type == StackObject.StackObjectType.Float;
+    var right = c.PopObject(isRightFloat ? Register.D1 : Register.X1);
+
+    var isLeftFloat = c.TopObject().Type == StackObject.StackObjectType.Float;
+    var left = c.PopObject(isLeftFloat ? Register.D0 : Register.X0);
+
+    // Si al menos uno es float, convertir ambos a float si es necesario
+    if (isLeftFloat || isRightFloat)
+    {
+        // Convertir int a float si es necesario
+        if (!isLeftFloat) c.Scvtf(Register.D0, Register.X0); // X0 → D0
+        if (!isRightFloat) c.Scvtf(Register.D1, Register.X1); // X1 → D1
+
+        if (op == "+") c.Fadd(Register.D0, Register.D0, Register.D1);
+        else if (op == "-") c.Fsub(Register.D0, Register.D0, Register.D1);
+
+        c.Comment("Pushing float result");
+        c.Push(Register.D0);
+        c.PushObject(c.FloatObject()); // Siempre push un float aquí
+        return null;
     }
+
+    // Si ambos son int
+    if (left.Type == StackObject.StackObjectType.Int && right.Type == StackObject.StackObjectType.Int)
+    {
+        if (op == "+") c.Add(Register.X0, Register.X0, Register.X1);
+        else if (op == "-") c.Sub(Register.X0, Register.X0, Register.X1);
+
+        c.Push(Register.X0);
+        c.PushObject(c.IntObject());
+        return null;
+    }
+
+    // Concatenación de strings
+    if (left.Type == StackObject.StackObjectType.String && right.Type == StackObject.StackObjectType.String && op == "+")
+    {
+        c.ConcatStrings("x0", "x1");
+        c.Push("x0");
+        c.PushObject(c.StringObject());
+        return null;
+    }
+
+    throw new Exception($"Operación {op} no válida entre tipos {left.Type} y {right.Type}");
+}
+
 
     //VisitAssignVar
     public override Object? VisitAssignVar(LanguageParser.AssignVarContext context)
